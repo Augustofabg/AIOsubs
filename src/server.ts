@@ -183,12 +183,12 @@ export function createServer(): express.Application {
 
       const declaredResources: string[] = Array.isArray(manifest.resources)
         ? manifest.resources.map((r: unknown) => {
-            if (typeof r === 'string') return r;
-            if (typeof r === 'object' && r !== null && 'name' in r) {
-              return String((r as { name: string }).name);
-            }
-            return '';
-          }).filter(Boolean)
+          if (typeof r === 'string') return r;
+          if (typeof r === 'object' && r !== null && 'name' in r) {
+            return String((r as { name: string }).name);
+          }
+          return '';
+        }).filter(Boolean)
         : ['subtitles'];
 
       const isConfigurable = Boolean(manifest.behaviorHints?.configurable || manifest.configurationURL);
@@ -245,236 +245,250 @@ export function createServer(): express.Application {
       return;
     }
 
-if (service === 'opensubtitles') {
-  try {
-    const response = await axios.get('https://api.opensubtitles.com/api/v1/subtitles', {
-      params: {
-        imdb_id: 'tt0133093',
-        type: 'movie',
-        languages: 'pt-BR'
-      },
-      headers: {
-        'Api-Key': apiKey,
-        'User-Agent': 'AIOSubtitles/1.0.0',
-        'Content-Type': 'application/json'
-      },
-      timeout: 6000
-    });
-
-    if (response.status === 200) {
-      res.json({ valid: true });
-      return;
-    }
-
-    res.json({ valid: false, error: 'Resposta inesperada' });
-  } catch {
-    res.json({ valid: false, error: 'Chave inválida ou sem permissão no OpenSubtitles' });
-  }
-
-  return;
-}
-    if (service === 'subdl') {
+    if (service === 'opensubtitles') {
       try {
-        const response = await axios.get('https://api.subdl.com/api/v1/subtitles', {
+        if (apiKey.length < 8) {
+          res.json({ valid: false, error: 'Chave do OpenSubtitles muito curta.' });
+          return;
+        }
+
+        const response = await axios.get('https://api.opensubtitles.com/api/v1/subtitles', {
           params: {
-            api_key: apiKey,
-            imdb_id: 'tt0111161'
+            imdb_id: '133093',
+            type: 'movie',
+            languages: 'pt-br'
           },
-          timeout: 6000
-        });
-        if (response.status === 200 && response.data?.status !== false) {
-          res.json({ valid: true });
-          return;
-        }
-        res.json({ valid: false, error: response.data?.error || 'Chave inválida no SubDL' });
-      } catch {
-        res.json({ valid: false, error: 'Chave inválida ou erro na conexão com SubDL' });
-      }
-      return;
-    }
-
-    if (service === 'subsource') {
-      try {
-        if (apiKey.length < 6) {
-          res.json({ valid: false, error: 'Chave de API inválida' });
-          return;
-        }
-        const response = await axios.get('https://api.subsource.net/api/v1/subtitles/search?imdb=tt0111161', {
           headers: {
-            'X-API-Key': apiKey,
-            'Referer': 'https://subsource.net/'
+            'Api-Key': apiKey,
+            'User-Agent': 'AIOSubs v1.0.0',
+            'Content-Type': 'application/json'
           },
           timeout: 6000
         });
+
         if (response.status === 200) {
           res.json({ valid: true });
           return;
         }
-        res.json({ valid: false, error: 'Chave inválida no Subsource' });
-      } catch {
-        if (apiKey.length >= 8) {
+
+        res.json({ valid: false, error: 'Resposta inesperada do OpenSubtitles' });
+      } catch (err: any) {
+        console.error('OpenSubtitles validation error:', err.response?.status, err.response?.data || err.message);
+        if (err.response?.status === 401 || err.response?.status === 403) {
+          res.json({ valid: false, error: 'Chave inválida ou não autorizada no OpenSubtitles' });
+          return;
+        }
+        if (apiKey.length >= 16) {
           res.json({ valid: true });
           return;
         }
-        res.json({ valid: false, error: 'Chave inválida' });
+        res.json({ valid: false, error: 'Erro ao validar chave no OpenSubtitles' });
       }
       return;
     }
 
-    res.status(400).json({ valid: false, error: 'Serviço desconhecido' });
-  });
-
-  const handleConfigSave = async (req: Request, res: Response): Promise<void> => {
-    const rawUuid = req.params?.uuid || req.body?.uuid || '';
-    const uuid = String(rawUuid).trim();
-    const password = String(req.body?.password || '').trim();
-    const config = req.body?.config;
-
-    console.log(`[HTTP] Recebida requisição de gravação para UUID: ${uuid || '(não informado)'}`);
-
-    if (!uuid || !isUuid(uuid)) {
-      res.status(400).json({ success: false, error: 'UUID inválido.' });
-      return;
-    }
-
-    if (!password) {
-      res.status(400).json({ success: false, error: 'A senha é obrigatória para salvar a configuração.' });
-      return;
-    }
-
-    if (!config || typeof config !== 'object') {
-      res.status(400).json({ success: false, error: 'Configuração inválida.' });
-      return;
-    }
-
-    const saveResult = await configStorage.saveConfigAsync(uuid, password, config);
-    if (!saveResult.success) {
-      const isDbError = saveResult.error?.includes('Database write failed');
-      const statusCode = isDbError ? 500 : 401;
-      res.status(statusCode).json({ success: false, error: saveResult.error || 'Não foi possível salvar a configuração.' });
-      return;
-    }
-
-    const baseUrl = getBaseUrl(req);
-    const manifestUrl = `${baseUrl}/${uuid}/manifest.json`;
-    const cleanHost = manifestUrl.replace(/^https?:\/\//i, '');
-    const stremioUrl = `stremio://${cleanHost}`;
-    const stremioWebUrl = `https://web.stremio.com/#/addons?addon=${encodeURIComponent(manifestUrl)}`;
-
-    res.status(200).json({
-      success: true,
-      uuid,
-      manifestUrl,
-      stremioUrl,
-      stremioWebUrl
-    });
-  };
-
-  app.post('/api/config/save', handleConfigSave);
-  app.post('/api/config/create', handleConfigSave);
-  app.post('/api/save', handleConfigSave);
-  app.post('/api/create', handleConfigSave);
-  app.post('/save', handleConfigSave);
-  app.post('/create', handleConfigSave);
-  app.put('/api/config/:uuid', handleConfigSave);
-  app.put('/api/save/:uuid', handleConfigSave);
-  app.put('/api/config', handleConfigSave);
-
-  const handleConfigLoad = async (req: Request, res: Response): Promise<void> => {
-    const rawUuid = req.params?.uuid || req.body?.uuid || '';
-    const uuid = String(rawUuid).trim();
-    const password = String(req.body?.password || '').trim();
-
-    if (!uuid || !isUuid(uuid) || !password) {
-      res.status(401).json({ success: false, error: 'UUID ou senha inválidos.' });
-      return;
-    }
-
-    const authResult = await configStorage.authenticateAndGetConfigAsync(uuid, password);
-    if (!authResult.success || !authResult.config) {
-      res.status(401).json({ success: false, error: 'UUID ou senha inválidos.' });
-      return;
-    }
-
-    res.status(200).json({
-      success: true,
-      uuid,
-      config: authResult.config
-    });
-  };
-
-  app.post('/api/config/load', handleConfigLoad);
-  app.post('/api/config/login', handleConfigLoad);
-  app.post('/api/load', handleConfigLoad);
-  app.post('/api/login', handleConfigLoad);
-  app.post('/login', handleConfigLoad);
-  app.post('/load', handleConfigLoad);
-
-  app.get('/', (_req: Request, res: Response) => {
-    res.sendFile(path.join(publicDir, 'index.html'));
-  });
-
-  app.get('/configure', (_req: Request, res: Response) => {
-    res.sendFile(path.join(publicDir, 'index.html'));
-  });
-
-  app.get('/dashboard', (_req: Request, res: Response) => {
-    res.sendFile(path.join(publicDir, 'index.html'));
-  });
-
-  app.get('/:config/configure', (_req: Request, res: Response) => {
-    res.sendFile(path.join(publicDir, 'index.html'));
-  });
-
-  app.get('/manifest.json', async (_req: Request, res: Response) => {
-    res.json(await buildManifest());
-  });
-
-  app.get('/:config/manifest.json', async (req: Request, res: Response) => {
-    res.json(await buildManifest(req.params.config));
-  });
-
-  const handleSubtitles = async (req: Request, res: Response): Promise<void> => {
+    if (service === 'subdl') {
     try {
-      const configParam = req.params.config;
-      const userConfig = await decodeUserConfigAsync(configParam);
-      const { type, id } = req.params;
-      const baseUrl = getBaseUrl(req);
-
-      const query = parseSubtitleQuery(type, id, req.query as Record<string, string>);
-      const response = await getAggregatedSubtitles(query, userConfig, baseUrl);
-
-      res.setHeader('Cache-Control', 'max-age=1800, public');
-      res.json(response);
-    } catch (err: unknown) {
-      Logger.error('Failed to handle subtitles request', err);
-      res.json({ subtitles: [] });
+      const response = await axios.get('https://api.subdl.com/api/v1/subtitles', {
+        params: {
+          api_key: apiKey,
+          imdb_id: 'tt0111161'
+        },
+        timeout: 6000
+      });
+      if (response.status === 200 && response.data?.status !== false) {
+        res.json({ valid: true });
+        return;
+      }
+      res.json({ valid: false, error: response.data?.error || 'Chave inválida no SubDL' });
+    } catch {
+      res.json({ valid: false, error: 'Chave inválida ou erro na conexão com SubDL' });
     }
-  };
+    return;
+  }
 
-  app.get('/:config/subtitles/:type/:id.json', handleSubtitles);
-  app.get('/:config/subtitles/:type/:id/:extra.json', handleSubtitles);
-  app.get('/subtitles/:type/:id.json', handleSubtitles);
-  app.get('/subtitles/:type/:id/:extra.json', handleSubtitles);
+  if (service === 'subsource') {
+    try {
+      if (apiKey.length < 6) {
+        res.json({ valid: false, error: 'Chave de API inválida' });
+        return;
+      }
+      const response = await axios.get('https://api.subsource.net/api/v1/subtitles/search?imdb=tt0111161', {
+        headers: {
+          'X-API-Key': apiKey,
+          'Referer': 'https://subsource.net/'
+        },
+        timeout: 6000
+      });
+      if (response.status === 200) {
+        res.json({ valid: true });
+        return;
+      }
+      res.json({ valid: false, error: 'Chave inválida no Subsource' });
+    } catch {
+      if (apiKey.length >= 8) {
+        res.json({ valid: true });
+        return;
+      }
+      res.json({ valid: false, error: 'Chave inválida' });
+    }
+    return;
+  }
 
-  // Direct subtitle download endpoints
-  app.get('/download/:id', handleShortIdDownload);
-  app.get('/download/:id/:filename', handleShortIdDownload);
-  app.get('/sub/:id', handleShortIdDownload);
-  app.get('/sub/:id/:filename', handleShortIdDownload);
+  res.status(400).json({ valid: false, error: 'Serviço desconhecido' });
+});
 
-  // Backward compatibility proxy endpoints
-  app.get('/proxy/subtitle/:data', handleSubtitleProxy);
-  app.get('/proxy/download/os-rest/:fileId', handleOpenSubtitlesRestDownload);
+const handleConfigSave = async (req: Request, res: Response): Promise<void> => {
+  const rawUuid = req.params?.uuid || req.body?.uuid || '';
+  const uuid = String(rawUuid).trim();
+  const password = String(req.body?.password || '').trim();
+  const config = req.body?.config;
 
-  app.use((req: Request, res: Response) => {
-    res.status(404).json({ error: 'Endpoint not found', path: req.path });
+  console.log(`[HTTP] Recebida requisição de gravação para UUID: ${uuid || '(não informado)'}`);
+
+  if (!uuid || !isUuid(uuid)) {
+    res.status(400).json({ success: false, error: 'UUID inválido.' });
+    return;
+  }
+
+  if (!password) {
+    res.status(400).json({ success: false, error: 'A senha é obrigatória para salvar a configuração.' });
+    return;
+  }
+
+  if (!config || typeof config !== 'object') {
+    res.status(400).json({ success: false, error: 'Configuração inválida.' });
+    return;
+  }
+
+  const saveResult = await configStorage.saveConfigAsync(uuid, password, config);
+  if (!saveResult.success) {
+    const isDbError = saveResult.error?.includes('Database write failed');
+    const statusCode = isDbError ? 500 : 401;
+    res.status(statusCode).json({ success: false, error: saveResult.error || 'Não foi possível salvar a configuração.' });
+    return;
+  }
+
+  const baseUrl = getBaseUrl(req);
+  const manifestUrl = `${baseUrl}/${uuid}/manifest.json`;
+  const cleanHost = manifestUrl.replace(/^https?:\/\//i, '');
+  const stremioUrl = `stremio://${cleanHost}`;
+  const stremioWebUrl = `https://web.stremio.com/#/addons?addon=${encodeURIComponent(manifestUrl)}`;
+
+  res.status(200).json({
+    success: true,
+    uuid,
+    manifestUrl,
+    stremioUrl,
+    stremioWebUrl
   });
+};
 
-  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-    Logger.error('Unhandled server exception', err);
-    res.status(500).json({ error: 'Internal server error' });
+app.post('/api/config/save', handleConfigSave);
+app.post('/api/config/create', handleConfigSave);
+app.post('/api/save', handleConfigSave);
+app.post('/api/create', handleConfigSave);
+app.post('/save', handleConfigSave);
+app.post('/create', handleConfigSave);
+app.put('/api/config/:uuid', handleConfigSave);
+app.put('/api/save/:uuid', handleConfigSave);
+app.put('/api/config', handleConfigSave);
+
+const handleConfigLoad = async (req: Request, res: Response): Promise<void> => {
+  const rawUuid = req.params?.uuid || req.body?.uuid || '';
+  const uuid = String(rawUuid).trim();
+  const password = String(req.body?.password || '').trim();
+
+  if (!uuid || !isUuid(uuid) || !password) {
+    res.status(401).json({ success: false, error: 'UUID ou senha inválidos.' });
+    return;
+  }
+
+  const authResult = await configStorage.authenticateAndGetConfigAsync(uuid, password);
+  if (!authResult.success || !authResult.config) {
+    res.status(401).json({ success: false, error: 'UUID ou senha inválidos.' });
+    return;
+  }
+
+  res.status(200).json({
+    success: true,
+    uuid,
+    config: authResult.config
   });
+};
 
-  return app;
+app.post('/api/config/load', handleConfigLoad);
+app.post('/api/config/login', handleConfigLoad);
+app.post('/api/load', handleConfigLoad);
+app.post('/api/login', handleConfigLoad);
+app.post('/login', handleConfigLoad);
+app.post('/load', handleConfigLoad);
+
+app.get('/', (_req: Request, res: Response) => {
+  res.sendFile(path.join(publicDir, 'index.html'));
+});
+
+app.get('/configure', (_req: Request, res: Response) => {
+  res.sendFile(path.join(publicDir, 'index.html'));
+});
+
+app.get('/dashboard', (_req: Request, res: Response) => {
+  res.sendFile(path.join(publicDir, 'index.html'));
+});
+
+app.get('/:config/configure', (_req: Request, res: Response) => {
+  res.sendFile(path.join(publicDir, 'index.html'));
+});
+
+app.get('/manifest.json', async (_req: Request, res: Response) => {
+  res.json(await buildManifest());
+});
+
+app.get('/:config/manifest.json', async (req: Request, res: Response) => {
+  res.json(await buildManifest(req.params.config));
+});
+
+const handleSubtitles = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const configParam = req.params.config;
+    const userConfig = await decodeUserConfigAsync(configParam);
+    const { type, id } = req.params;
+    const baseUrl = getBaseUrl(req);
+
+    const query = parseSubtitleQuery(type, id, req.query as Record<string, string>);
+    const response = await getAggregatedSubtitles(query, userConfig, baseUrl);
+
+    res.setHeader('Cache-Control', 'max-age=1800, public');
+    res.json(response);
+  } catch (err: unknown) {
+    Logger.error('Failed to handle subtitles request', err);
+    res.json({ subtitles: [] });
+  }
+};
+
+app.get('/:config/subtitles/:type/:id.json', handleSubtitles);
+app.get('/:config/subtitles/:type/:id/:extra.json', handleSubtitles);
+app.get('/subtitles/:type/:id.json', handleSubtitles);
+app.get('/subtitles/:type/:id/:extra.json', handleSubtitles);
+
+// Direct subtitle download endpoints
+app.get('/download/:id', handleShortIdDownload);
+app.get('/download/:id/:filename', handleShortIdDownload);
+app.get('/sub/:id', handleShortIdDownload);
+app.get('/sub/:id/:filename', handleShortIdDownload);
+
+// Backward compatibility proxy endpoints
+app.get('/proxy/subtitle/:data', handleSubtitleProxy);
+app.get('/proxy/download/os-rest/:fileId', handleOpenSubtitlesRestDownload);
+
+app.use((req: Request, res: Response) => {
+  res.status(404).json({ error: 'Endpoint not found', path: req.path });
+});
+
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  Logger.error('Unhandled server exception', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+return app;
 }
