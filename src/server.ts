@@ -113,7 +113,7 @@ export function createServer(): express.Application {
   app.get('/health', healthHandler);
   app.get('/api/health', healthHandler);
 
-  app.use('/:config', express.static(publicDir));
+  app.use('/:config', express.static(publicDir, { index: false }));
 
   app.get('/api/languages', (_req: Request, res: Response) => {
     res.json({ languages: SUPPORTED_LANGUAGES });

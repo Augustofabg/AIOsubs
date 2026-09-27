@@ -289,6 +289,130 @@ async function runAllTests(): Promise<void> {
   }
   console.log(`  ✅ Autenticação com senha incorreta retornou erro seguro: "${authFail.error}"`);
 
+  // 8. Test Language Remapping on Native Services (OpenSubtitles, SubDL) & Addons + Joint Deduplication
+  console.log('\n--- Teste 8: Validação do Remapeamento Global de Idiomas em Services (OpenSubtitles, SubDL) e Addons + Deduplicação Conjunta ---');
+  
+  // 8.1 Consistency of provider language codes normalization & remapping
+  const providerLanguagesTest = [
+    { raw: 'pt-pt', expected: 'pob' },
+    { raw: 'pt-br', expected: 'pob' },
+    { raw: 'Portuguese (Brazil)', expected: 'pob' },
+    { raw: 'Portuguese (Portugal)', expected: 'pob' },
+    { raw: 'Portuguese (BR)', expected: 'pob' },
+    { raw: 'Portuguese (PT)', expected: 'pob' },
+    { raw: 'PT-BR', expected: 'pob' },
+    { raw: 'PT-PT', expected: 'pob' },
+    { raw: 'por', expected: 'pob' },
+    { raw: 'pob', expected: 'pob' }
+  ];
+
+  const testRemapRules = { 'por': 'pob', 'pt-pt': 'pob', 'pt-br': 'pob' };
+
+  for (const { raw, expected } of providerLanguagesTest) {
+    const res = validateAndNormalizeLanguage(raw, false, testRemapRules);
+    if (!res.valid || res.normalizedLang !== expected) {
+      console.error(`❌ Falha no Teste 8.1: Idioma "${raw}" deveria ser remapeado para "${expected}", recebeu "${res.normalizedLang}"`);
+      process.exit(1);
+    }
+  }
+  console.log('  ✅ Todos os códigos de provedores (OpenSubtitles, SubDL, Addons) foram padronizados e remapeados para "pob" com sucesso');
+
+  // 8.2 End-to-end pipeline test with multi-provider results and joint deduplication
+  const multiProviderRawSubtitles: RawSubtitleItem[] = [
+    {
+      id: 'os-sub-1',
+      provider: 'opensubtitles',
+      providerName: 'OpenSubtitles',
+      url: 'https://api.opensubtitles.com/download/sub1.srt',
+      lang: 'pt-pt', // OpenSubtitles returns pt-pt
+      release: 'Stranger.Things.S01E01.720p.WEBRip.x264'
+    },
+    {
+      id: 'subdl-sub-2',
+      provider: 'subdl',
+      providerName: 'SubDL',
+      url: 'https://dl.subdl.com/sub2.srt',
+      lang: 'Portuguese (Portugal)', // SubDL returns Portuguese (Portugal)
+      release: 'Stranger Things S01E01 720p WEBRip x264' // Duplicate release of os-sub-1
+    },
+    {
+      id: 'subdl-sub-3',
+      provider: 'subdl',
+      providerName: 'SubDL',
+      url: 'https://dl.subdl.com/sub3.srt',
+      lang: 'Portuguese (BR)', // SubDL returns Portuguese (BR)
+      release: 'Stranger Things S01E01 1080p NF WEBRip'
+    },
+    {
+      id: 'addon-sub-4',
+      provider: 'community-addon',
+      providerName: 'Community Addon',
+      url: 'https://example.com/sub4.srt',
+      lang: 'por', // Addon returns por
+      release: 'Stranger Things S01E01 480p HDTV'
+    }
+  ];
+
+  const remapTestQuery = {
+    type: 'series',
+    id: 'tt4574334:1:1',
+    imdbId: 'tt4574334',
+    season: 1,
+    episode: 1
+  };
+
+  const remapUserConfig: UserConfig = {
+    ...DEFAULT_USER_CONFIG,
+    providers: {
+      'opensubtitles': { enabled: true, apiKey: 'test-os-key' },
+      'subdl': { enabled: true, apiKey: 'test-subdl-key' },
+      'subsource': { enabled: false, apiKey: '' }
+    },
+    languages: ['pob'], // Strict whitelist: pob only
+    languageRemap: { 'por': 'pob', 'pt-pt': 'pob', 'pt-br': 'pob' },
+    deduplication: true,
+    providerPriority: ['opensubtitles', 'subdl', 'community-addon']
+  };
+
+  // Seed cache to simulate provider responses
+  const enabledProviderIds = Object.keys(remapUserConfig.providers).filter(
+    id => remapUserConfig.providers[id]?.enabled !== false
+  );
+  const remapCacheKey = globalSubtitleCache.generateKey(
+    remapTestQuery.id,
+    remapUserConfig.languages,
+    enabledProviderIds,
+    remapTestQuery.season,
+    remapTestQuery.episode
+  );
+  globalSubtitleCache.set(remapCacheKey, multiProviderRawSubtitles);
+
+  const remapResponse = await getAggregatedSubtitles(remapTestQuery, remapUserConfig, 'http://localhost:7000');
+
+  // Verify all returned subtitles have lang === 'pob'
+  for (const s of remapResponse.subtitles) {
+    if (s.lang !== 'pob') {
+      console.error(`❌ Falha no Teste 8.2: Subtitle id "${s.id}" vazou lang "${s.lang}" em vez de "pob"!`);
+      process.exit(1);
+    }
+  }
+  console.log(`  ✅ 100% das legendas finais (${remapResponse.subtitles.length} itens) possuem lang: "pob"`);
+
+  // Verify deduplication merged the duplicate between OpenSubtitles and SubDL
+  if (remapResponse.subtitles.length !== 3) {
+    console.error(`❌ Falha no Teste 8.2: Deduplicação conjunta falhou. Esperava 3 legendas, recebeu ${remapResponse.subtitles.length}`);
+    process.exit(1);
+  }
+  console.log('  ✅ Deduplicação conjunta funcionou perfeitamente entre OpenSubtitles e SubDL sob a mesma linguagem remapeada');
+
+  // Verify higher priority provider was kept for the duplicated release (opensubtitles)
+  const remainingIds = remapResponse.subtitles.map(s => s.id);
+  if (!remainingIds.includes('os-sub-1') || remainingIds.includes('subdl-sub-2')) {
+    console.error('❌ Falha no Teste 8.2: Prioridade de provedores na deduplicação conjunta falhou!', remainingIds);
+    process.exit(1);
+  }
+  console.log('  ✅ Prioridade de provedores respeitada na deduplicação (OpenSubtitles prevaleceu sobre SubDL duplicado)');
+
   console.log('\n🎉 TODOS OS TESTES PASSARAM COM 100% DE SUCESSO!');
   process.exit(0);
 }

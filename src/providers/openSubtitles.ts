@@ -72,7 +72,7 @@ export class OpenSubtitlesProvider extends BaseSubtitleProvider {
     const effectiveLangs = (context.config.languages && context.config.languages.length > 0)
       ? context.config.languages
       : ['pob', 'eng'];
-    const osLangs = mapWhitelistToOpenSubtitles(effectiveLangs);
+    const osLangs = mapWhitelistToOpenSubtitles(effectiveLangs, context.config.languageRemap);
     if (osLangs.length > 0) {
       params.languages = osLangs.join(',');
     }

@@ -24,7 +24,7 @@ export const DEFAULT_USER_CONFIG: UserConfig = {
     'por': 'pob',
     'pt-br': 'pob',
     'pt': 'pob',
-    'pt-pt': 'por'
+    'pt-pt': 'pob'
   },
   providerTimeoutMs: 6000,
   deduplication: true,

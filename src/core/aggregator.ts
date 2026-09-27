@@ -78,23 +78,24 @@ export async function getAggregatedSubtitles(
   const normalizedItems: RawSubtitleItem[] = [];
 
   for (const sub of rawSubtitles) {
+    const item: RawSubtitleItem = { ...sub };
     const validation = validateAndNormalizeLanguage(
-      sub.lang,
+      item.lang,
       config.allowUnknownLanguages,
       config.languageRemap
     );
 
     if (!validation.valid || !validation.normalizedLang) {
-      Logger.warn(`Discarded subtitle due to invalid ISO 639-2 language: "${sub.lang}" from provider [${sub.provider}]`, {
-        provider: sub.providerName || sub.provider,
-        release: sub.release,
+      Logger.warn(`Discarded subtitle due to invalid ISO 639-2 language: "${item.lang}" from provider [${item.provider}]`, {
+        provider: item.providerName || item.provider,
+        release: item.release,
         reason: validation.discardedReason
       });
       continue;
     }
 
-    sub.lang = validation.normalizedLang;
-    normalizedItems.push(sub);
+    item.lang = validation.normalizedLang;
+    normalizedItems.push(item);
   }
 
   Logger.info(`Language validation (ISO 639-2): ${rawSubtitles.length} -> ${normalizedItems.length} subtitles`, {
