@@ -1,6 +1,7 @@
 import { BaseSubtitleProvider } from './base';
 import { SubtitleQuery, ProviderContext, RawSubtitleItem } from '../types/provider';
 import { ENV } from '../config/env';
+import { mapWhitelistToSubDL } from '../utils/languages';
 
 interface SubDLSubtitleItem {
   release_name: string;
@@ -53,7 +54,11 @@ export class SubDLProvider extends BaseSubtitleProvider {
       params.api_key = apiKey;
     }
 
-    if (query.season !== null && query.episode !== null) {
+    if (query.type === 'series' && query.season !== null && query.episode !== null) {
+      params.type = 'tv';
+      params.season = query.season;
+      params.episode = query.episode;
+    } else if (query.season !== null && query.episode !== null) {
       params.type = 'tv';
       params.season = query.season;
       params.episode = query.episode;
@@ -61,9 +66,13 @@ export class SubDLProvider extends BaseSubtitleProvider {
       params.type = 'movie';
     }
 
-    // Filter languages if configured
-    if (context.config.languages && context.config.languages.length > 0) {
-      params.languages = context.config.languages.join(',').toUpperCase();
+    // Filter languages strictly by user whitelist
+    const effectiveLangs = (context.config.languages && context.config.languages.length > 0)
+      ? context.config.languages
+      : ['pob', 'eng'];
+    const subdlLangs = mapWhitelistToSubDL(effectiveLangs);
+    if (subdlLangs.length > 0) {
+      params.languages = subdlLangs.join(',');
     }
 
     const response = await this.httpGet<SubDLResponse>(

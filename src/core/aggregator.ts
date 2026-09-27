@@ -27,10 +27,14 @@ export function parseSubtitleQuery(
       kitsuId = `${parts[0]}:${parts[1]}`;
       episode = parseInt(parts[2], 10);
     } else {
-      imdbId = parts[0];
+      imdbId = parts[0].startsWith('tt') ? parts[0] : (parts[0].match(/^\d+$/) ? `tt${parts[0]}` : parts[0]);
+      if (parts.length >= 3) {
+        season = parseInt(parts[1], 10);
+        episode = parseInt(parts[2], 10);
+      }
     }
-  } else if (id.startsWith('tt')) {
-    imdbId = id;
+  } else {
+    imdbId = id.startsWith('tt') ? id : (id.match(/^\d+$/) ? `tt${id}` : id);
   }
 
   return {
@@ -97,12 +101,16 @@ export async function getAggregatedSubtitles(
     allowUnknown: config.allowUnknownLanguages
   });
 
+  const effectiveWhitelist = (config.languages && config.languages.length > 0)
+    ? config.languages
+    : ['pob', 'eng'];
+
   const whitelistedItems = normalizedItems.filter(item =>
-    isLanguageWhitelisted(item.lang, config.languages)
+    isLanguageWhitelisted(item.lang, effectiveWhitelist)
   );
 
   Logger.info(`Language whitelist filter: ${normalizedItems.length} -> ${whitelistedItems.length} subtitles`, {
-    whitelist: config.languages
+    whitelist: effectiveWhitelist
   });
 
   let orderedItems = prioritizeSubtitles(whitelistedItems, config.providerPriority);
@@ -113,17 +121,20 @@ export async function getAggregatedSubtitles(
     Logger.info(`Deduplication: ${beforeCount} -> ${orderedItems.length} subtitles`);
   }
 
-  // Build clean response with original IDs, normalized language codes, and absolute URLs
+  // Build clean response with original IDs, normalized language codes, absolute URLs, and formatted display title
   const subtitles: StremioSubtitle[] = orderedItems.map(item => {
     let finalUrl = item.url;
     if (finalUrl.startsWith('/')) {
       finalUrl = `${baseUrl}${finalUrl}`;
     }
 
+    const displayTitle = item.release || `${item.providerName || item.provider} Subtitle`;
+
     return {
       id: item.id,
       lang: item.lang,
-      url: finalUrl
+      url: finalUrl,
+      title: displayTitle
     };
   });
 

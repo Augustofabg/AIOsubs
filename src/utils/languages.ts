@@ -416,3 +416,53 @@ export function normalizeLanguageCode(raw: string | undefined | null): string | 
   
   return null;
 }
+
+/**
+ * Maps ISO 639-2 whitelist languages to OpenSubtitles v1 codes (e.g. 'pob' -> 'pt-br,pob', 'eng' -> 'en,eng')
+ */
+export function mapWhitelistToOpenSubtitles(languages: string[]): string[] {
+  const result = new Set<string>();
+  for (const lang of languages) {
+    const norm = normalizeLanguageCode(lang) || lang.trim().toLowerCase();
+    if (norm === 'pob') {
+      result.add('pt-br');
+      result.add('pob');
+    } else if (norm === 'por') {
+      result.add('pt-pt');
+      result.add('por');
+      result.add('pt');
+    } else {
+      const info = LOOKUP_MAP.get(norm);
+      if (info?.iso639_1) {
+        result.add(info.iso639_1);
+      }
+      result.add(norm);
+    }
+  }
+  return Array.from(result);
+}
+
+/**
+ * Maps ISO 639-2 whitelist languages to SubDL compatible codes (e.g. 'pob' -> 'PT-BR', 'eng' -> 'EN')
+ */
+export function mapWhitelistToSubDL(languages: string[]): string[] {
+  const result = new Set<string>();
+  for (const lang of languages) {
+    const norm = normalizeLanguageCode(lang) || lang.trim().toLowerCase();
+    if (norm === 'pob') {
+      result.add('PT-BR');
+      result.add('POB');
+    } else if (norm === 'por') {
+      result.add('PT-PT');
+      result.add('POR');
+      result.add('PT');
+    } else {
+      const info = LOOKUP_MAP.get(norm);
+      if (info?.iso639_1) {
+        result.add(info.iso639_1.toUpperCase());
+      }
+      result.add(norm.toUpperCase());
+    }
+  }
+  return Array.from(result);
+}
