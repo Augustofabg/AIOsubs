@@ -78,25 +78,34 @@ export function getFfmpegCandidates(): string[] {
     list.push(process.env.FFMPEG_PATH.trim());
   }
 
-  // 2. Local project bin directory
+  // 2. npm package ffmpeg-static
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const ffmpegStatic = require('ffmpeg-static');
+    if (ffmpegStatic && typeof ffmpegStatic === 'string' && fs.existsSync(ffmpegStatic)) {
+      list.push(ffmpegStatic);
+    }
+  } catch {}
+
+  // 3. Local project bin directory
   list.push(path.join(process.cwd(), 'bin', isWin ? 'ffmpeg.exe' : 'ffmpeg'));
 
-  // 3. User local bin directory ($HOME/.local/bin)
+  // 4. User local bin directory ($HOME/.local/bin)
   if (process.env.HOME) {
     list.push(path.join(process.env.HOME, '.local', 'bin', 'ffmpeg'));
   }
 
-  // 4. Virtual environment (Docker / Render / Local)
+  // 5. Virtual environment (Docker / Render / Local)
   list.push('/opt/venv/bin/ffmpeg');
   list.push(path.join(process.cwd(), '.venv', isWin ? 'Scripts' : 'bin', isWin ? 'ffmpeg.exe' : 'ffmpeg'));
   list.push(path.join(process.cwd(), 'venv', isWin ? 'Scripts' : 'bin', isWin ? 'ffmpeg.exe' : 'ffmpeg'));
 
-  // 5. Standard Linux / Unix paths
+  // 6. Standard Linux / Unix paths
   list.push('/usr/local/bin/ffmpeg');
   list.push('/usr/bin/ffmpeg');
   list.push('/bin/ffmpeg');
 
-  // 6. System PATH fallback
+  // 7. System PATH fallback
   list.push('ffmpeg');
 
   return list;
@@ -177,7 +186,7 @@ export function getAlassCandidates(): string[] {
 async function resolveCandidate(
   candidates: string[],
   versionArgs: string[],
-  timeoutMs: number = 500
+  timeoutMs: number = 3000
 ): Promise<{ available: boolean; resolvedPath: string }> {
   for (const candidate of candidates) {
     // If it's a file path, check if it exists on disk before testing spawn
@@ -230,7 +239,7 @@ export function getAlassPath(): string {
 }
 
 export async function isFfmpegAvailable(): Promise<boolean> {
-  const result = await resolveCandidate(getFfmpegCandidates(), ['-version'], 500);
+  const result = await resolveCandidate(getFfmpegCandidates(), ['-version'], 3000);
   if (result.available) {
     resolvedFfmpegPath = result.resolvedPath;
   }
@@ -238,7 +247,7 @@ export async function isFfmpegAvailable(): Promise<boolean> {
 }
 
 export async function isFfsubsyncAvailable(): Promise<boolean> {
-  const result = await resolveCandidate(getFfsubsyncCandidates(), ['--version'], 500);
+  const result = await resolveCandidate(getFfsubsyncCandidates(), ['--version'], 3000);
   if (result.available) {
     resolvedFfsubsyncPath = result.resolvedPath;
   }
@@ -247,10 +256,10 @@ export async function isFfsubsyncAvailable(): Promise<boolean> {
 
 export async function isAlassAvailable(): Promise<boolean> {
   // First try --version
-  let result = await resolveCandidate(getAlassCandidates(), ['--version'], 500);
+  let result = await resolveCandidate(getAlassCandidates(), ['--version'], 3000);
   if (!result.available) {
     // Secondary fallback with --help for alass variants
-    result = await resolveCandidate(getAlassCandidates(), ['--help'], 500);
+    result = await resolveCandidate(getAlassCandidates(), ['--help'], 3000);
   }
   if (result.available) {
     resolvedAlassPath = result.resolvedPath;

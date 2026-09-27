@@ -22,9 +22,15 @@ if [ ! -f "bin/alass" ] || [ ! -s "bin/alass" ]; then
   fi
 fi
 
-# 2. Download ffmpeg static binary if system ffmpeg is missing
-if ! command -v ffmpeg &> /dev/null && { [ ! -f "bin/ffmpeg" ] || [ ! -s "bin/ffmpeg" ]; }; then
-  echo "System ffmpeg not found. Downloading precompiled static ffmpeg..."
+# 2. Setup ffmpeg static binary
+if [ -f "node_modules/ffmpeg-static/ffmpeg" ] && [ ! -f "bin/ffmpeg" ]; then
+  ln -sf "$(pwd)/node_modules/ffmpeg-static/ffmpeg" bin/ffmpeg 2>/dev/null || cp "node_modules/ffmpeg-static/ffmpeg" bin/ffmpeg 2>/dev/null || true
+  chmod +x bin/ffmpeg 2>/dev/null || true
+  echo "ffmpeg linked from node_modules/ffmpeg-static to bin/ffmpeg"
+fi
+
+if [ ! -f "bin/ffmpeg" ] || [ ! -s "bin/ffmpeg" ]; then
+  echo "Downloading precompiled static ffmpeg..."
   curl -fsSL https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0/ffmpeg-linux-x64 -o bin/ffmpeg || true
   if [ -s "bin/ffmpeg" ]; then
     chmod +x bin/ffmpeg
@@ -37,28 +43,16 @@ fi
 # 3. Setup ffsubsync in virtual environment or user site if python3 is available
 if ! command -v ffsubsync &> /dev/null && [ ! -f "bin/ffsubsync" ] && [ ! -f "/opt/venv/bin/ffsubsync" ]; then
   if command -v python3 &> /dev/null; then
-    echo "Checking for ffsubsync installation..."
-    # 3a. Try project-level virtual environment
-    python3 -m venv .venv 2>/dev/null || true
-    if [ -f ".venv/bin/pip" ]; then
-      .venv/bin/pip install --no-cache-dir ffsubsync 2>/dev/null || true
-      if [ -f ".venv/bin/ffsubsync" ]; then
-        ln -sf "$(pwd)/.venv/bin/ffsubsync" bin/ffsubsync 2>/dev/null || true
-        echo "ffsubsync installed in .venv and linked to bin/ffsubsync"
-      fi
-    fi
-
-    # 3b. Try user site pip install as fallback
-    if [ ! -f "bin/ffsubsync" ]; then
-      python3 -m pip install --no-cache-dir --user ffsubsync 2>/dev/null || pip3 install --no-cache-dir --user ffsubsync 2>/dev/null || true
-      USER_BASE=$(python3 -m site --user-base 2>/dev/null || echo "$HOME/.local")
-      if [ -f "$USER_BASE/bin/ffsubsync" ]; then
-        ln -sf "$USER_BASE/bin/ffsubsync" bin/ffsubsync 2>/dev/null || true
-        echo "ffsubsync linked from $USER_BASE/bin/ffsubsync"
-      elif [ -f "$HOME/.local/bin/ffsubsync" ]; then
-        ln -sf "$HOME/.local/bin/ffsubsync" bin/ffsubsync 2>/dev/null || true
-        echo "ffsubsync linked from $HOME/.local/bin/ffsubsync"
-      fi
+    echo "Attempting ffsubsync installation..."
+    # Install webrtcvad-wheels first to bypass C compiler requirements on Render
+    python3 -m pip install --no-cache-dir --user webrtcvad-wheels ffsubsync 2>/dev/null || pip3 install --no-cache-dir --user webrtcvad-wheels ffsubsync 2>/dev/null || true
+    USER_BASE=$(python3 -m site --user-base 2>/dev/null || echo "$HOME/.local")
+    if [ -f "$USER_BASE/bin/ffsubsync" ]; then
+      ln -sf "$USER_BASE/bin/ffsubsync" bin/ffsubsync 2>/dev/null || cp "$USER_BASE/bin/ffsubsync" bin/ffsubsync 2>/dev/null || true
+      echo "ffsubsync installed and linked to bin/ffsubsync"
+    elif [ -f "$HOME/.local/bin/ffsubsync" ]; then
+      ln -sf "$HOME/.local/bin/ffsubsync" bin/ffsubsync 2>/dev/null || cp "$HOME/.local/bin/ffsubsync" bin/ffsubsync 2>/dev/null || true
+      echo "ffsubsync linked from $HOME/.local/bin/ffsubsync"
     fi
   fi
 fi
