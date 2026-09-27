@@ -296,6 +296,15 @@ export async function handleUnifiedSubtitleProxy(req: Request, res: Response): P
     const isAss = detectedFormat === 'ass' || detectedFormat === 'ssa' || isAssOrSsa(utf8Text, finalFilename);
 
     if (isAss) {
+      const vttParam = (req.query.vtt as string) || (req.query.convertVtt as string) || (req.query.vttConversion as string);
+      const isVttConversionDisabled = vttParam === '0' || vttParam === 'false' || vttParam === 'off' || vttParam === 'no';
+
+      if (isVttConversionDisabled) {
+        // VTT conversion disabled by user configuration: deliver raw ASS/SSA directly
+        sendSubtitleResponse(res, utf8Text, 'ass', finalFilename);
+        return;
+      }
+
       const nativeAssSupported = clientSupportsNativeAss(req.headers['user-agent'], clientParam);
 
       if (nativeAssSupported && req.query.format !== 'vtt') {
@@ -461,6 +470,15 @@ export async function handleOpenSubtitlesRestDownload(req: Request, res: Respons
     const utf8Text = toCleanUtf8(cleanBuffer);
     const isAss = effectiveFormat === 'ass' || effectiveFormat === 'ssa' || isAssOrSsa(utf8Text, finalFilename);
     if (isAss) {
+      const vttParam = (req.query.vtt as string) || (req.query.convertVtt as string) || (req.query.vttConversion as string);
+      const isVttConversionDisabled = vttParam === '0' || vttParam === 'false' || vttParam === 'off' || vttParam === 'no';
+
+      if (isVttConversionDisabled) {
+        // VTT conversion disabled by user configuration: deliver raw ASS/SSA directly
+        sendSubtitleResponse(res, utf8Text, 'ass', finalFilename);
+        return;
+      }
+
       const nativeAssSupported = clientSupportsNativeAss(req.headers['user-agent'], req.query.client as string);
       if (nativeAssSupported && req.query.format !== 'vtt') {
         sendSubtitleResponse(res, utf8Text, 'ass', finalFilename);

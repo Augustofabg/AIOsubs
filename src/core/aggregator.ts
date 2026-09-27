@@ -143,7 +143,17 @@ export async function getAggregatedSubtitles(
         if (query.season !== undefined) queryParams.set('season', String(query.season));
         if (query.episode !== undefined) queryParams.set('episode', String(query.episode));
         if (item.lang) queryParams.set('lang', item.lang);
+        if (config.vttConversion === false || config.autoAlignment?.vttConversion === false) {
+          queryParams.set('vtt', '0');
+        }
         finalUrl = `${baseUrl}/sub/proxy?${queryParams.toString()}`;
+      }
+    }
+
+    const vttDisabled = config.vttConversion === false || config.autoAlignment?.vttConversion === false;
+    if (vttDisabled && (finalUrl.includes('/sub/proxy') || finalUrl.includes('/proxy/download'))) {
+      if (!finalUrl.includes('vtt=')) {
+        finalUrl += finalUrl.includes('?') ? '&vtt=0' : '?vtt=0';
       }
     }
 

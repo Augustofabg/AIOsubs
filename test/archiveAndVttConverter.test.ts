@@ -14,6 +14,7 @@ import {
   clientSupportsNativeAss,
   isAssOrSsa
 } from '../src/services/converter';
+import { decodeUserConfig, encodeUserConfig } from '../src/config/userConfig';
 
 async function runArchiveAndVttTests() {
   console.log('🧪 Starting Universal Archive Extractor & VTT Converter Test Suite...\n');
@@ -279,6 +280,55 @@ Dialogue: 0,0:01:30.00,0:01:33.00,Default,,0,0,0,,{\\i1}Fala em itálico com ví
     assert.strictEqual(corruptRes.status, 200, 'Corrupted upstream must return HTTP 200 safe fallback, never 500');
     assert.strictEqual(corruptRes.headers.get('x-subtitle-fallback'), 'true');
     console.log('  ✅ Corrupted ZIP upstream handled with safe HTTP 200 fallback without crashing player');
+
+    // 6e. Deliver ASS to Web Browser with &vtt=0 -> Deactivated VTT conversion delivers raw ASS intact
+    const disabledVttRes = await fetch(
+      `http://localhost:${port}/sub/proxy?url=${encodeURIComponent(`http://localhost:${mockPort}/test-styled.ass`)}&filename=styled.ass&vtt=0`,
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
+        }
+      }
+    );
+    assert.strictEqual(disabledVttRes.status, 200);
+    assert(disabledVttRes.headers.get('content-type')?.includes('text/x-ssa'), 'Disabled VTT conversion must return text/x-ssa even to web browsers');
+    const disabledVttText = await disabledVttRes.text();
+    assert(disabledVttText.includes('[Script Info]'), 'Original raw ASS styling must be preserved when VTT conversion is deactivated');
+    assert(!disabledVttText.startsWith('WEBVTT'), 'Must not convert to WEBVTT when vtt=0 is passed');
+    console.log('  ✅ /sub/proxy with vtt=0 respected user toggle and bypassed VTT conversion for browser client');
+
+    // 6f. Deliver ASS to Web Browser with &vttConversion=false
+    const disabledVttRes2 = await fetch(
+      `http://localhost:${port}/sub/proxy?url=${encodeURIComponent(`http://localhost:${mockPort}/test-styled.ass`)}&filename=styled.ass&vttConversion=false`,
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
+        }
+      }
+    );
+    assert.strictEqual(disabledVttRes2.status, 200);
+    assert(disabledVttRes2.headers.get('content-type')?.includes('text/x-ssa'));
+    const disabledVttText2 = await disabledVttRes2.text();
+    assert(disabledVttText2.includes('[Script Info]'));
+    console.log('  ✅ /sub/proxy with vttConversion=false also disabled VTT conversion correctly');
+
+    // 6g. UserConfig decode & encode maintains vttConversion toggle state
+    const cfgDefault = decodeUserConfig('');
+    assert.strictEqual(cfgDefault.vttConversion, true, 'Default vttConversion must be true');
+    assert.strictEqual(cfgDefault.autoAlignment?.vttConversion, true, 'Default autoAlignment.vttConversion must be true');
+
+    const encodedDisabled = encodeUserConfig({
+      ...cfgDefault,
+      vttConversion: false,
+      autoAlignment: {
+        ...cfgDefault.autoAlignment!,
+        vttConversion: false
+      }
+    });
+    const cfgDisabled = decodeUserConfig(encodedDisabled);
+    assert.strictEqual(cfgDisabled.vttConversion, false, 'vttConversion: false must persist through encoding/decoding');
+    assert.strictEqual(cfgDisabled.autoAlignment?.vttConversion, false, 'autoAlignment.vttConversion: false must persist');
+    console.log('  ✅ UserConfig correctly serializes and restores vttConversion state');
 
   } finally {
     await new Promise<void>((resolve) => testServer.close(() => resolve()));

@@ -35,6 +35,7 @@ export const DEFAULT_USER_CONFIG: UserConfig = {
   providerTimeoutMs: 6000,
   deduplication: true,
   deduplicationStrategy: 'both',
+  vttConversion: true,
   cacheTtlMinutes: 30,
   formatter: {
     preset: 'clean',
@@ -45,7 +46,8 @@ export const DEFAULT_USER_CONFIG: UserConfig = {
     enabled: false,
     sampleDurationMinutes: 2,
     timeoutSeconds: 5,
-    tool: 'auto'
+    tool: 'auto',
+    vttConversion: true
   }
 };
 
@@ -263,6 +265,10 @@ export function mergeWithDefaults(partial: PartialUserConfig): UserConfig {
     descriptionTemplate: formatterDesc
   };
 
+  const vttConversion = partial.vttConversion !== undefined
+    ? Boolean(partial.vttConversion)
+    : (partial.autoAlignment?.vttConversion !== undefined ? Boolean(partial.autoAlignment.vttConversion) : true);
+
   const autoAlignEnabled = Boolean(partial.autoAlignment?.enabled);
   const sampleDuration = (typeof partial.autoAlignment?.sampleDurationMinutes === 'number' && [2, 5].includes(partial.autoAlignment.sampleDurationMinutes))
     ? partial.autoAlignment.sampleDurationMinutes
@@ -274,11 +280,13 @@ export function mergeWithDefaults(partial: PartialUserConfig): UserConfig {
     ? partial.autoAlignment.tool
     : 'auto';
 
+  result.vttConversion = vttConversion;
   result.autoAlignment = {
     enabled: autoAlignEnabled,
     sampleDurationMinutes: sampleDuration,
     timeoutSeconds: timeoutSec,
-    tool: alignTool
+    tool: alignTool,
+    vttConversion
   };
 
   return result;

@@ -31,6 +31,7 @@ export interface AutoAlignmentConfig {
   sampleDurationMinutes: number;
   timeoutSeconds: number;
   tool?: 'alass' | 'ffsubsync' | 'auto';
+  vttConversion?: boolean;
 }
 
 export interface UserConfig {
@@ -52,6 +53,7 @@ export interface UserConfig {
   deduplication: boolean;
   deduplicationStrategy?: 'both' | 'hash' | 'fuzzy';
 
+  vttConversion?: boolean;
   cacheTtlMinutes: number;
   formatter?: FormatterConfig;
   autoAlignment?: AutoAlignmentConfig;

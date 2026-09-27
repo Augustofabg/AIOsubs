@@ -62,11 +62,13 @@ const DEFAULT_CONFIG = {
     nameTemplate: '{sub.lang}',
     descriptionTemplate: ''
   },
+  vttConversion: true,
   autoAlignment: {
     enabled: false,
     sampleDurationMinutes: 2,
     timeoutSeconds: 5,
-    tool: 'auto'
+    tool: 'auto',
+    vttConversion: true
   }
 };
 
@@ -443,21 +445,28 @@ function applyConfigWithMigration(parsed) {
     };
   }
 
+  const vttConversion = parsed.vttConversion !== undefined
+    ? Boolean(parsed.vttConversion)
+    : (parsed.autoAlignment?.vttConversion !== undefined ? Boolean(parsed.autoAlignment.vttConversion) : true);
+
   if (parsed.autoAlignment && typeof parsed.autoAlignment === 'object') {
     merged.autoAlignment = {
       enabled: Boolean(parsed.autoAlignment.enabled),
       sampleDurationMinutes: Number(parsed.autoAlignment.sampleDurationMinutes) || 2,
       timeoutSeconds: Number(parsed.autoAlignment.timeoutSeconds) || 5,
-      tool: parsed.autoAlignment.tool || 'auto'
+      tool: parsed.autoAlignment.tool || 'auto',
+      vttConversion: vttConversion
     };
   } else {
     merged.autoAlignment = {
       enabled: false,
       sampleDurationMinutes: 2,
       timeoutSeconds: 5,
-      tool: 'auto'
+      tool: 'auto',
+      vttConversion: vttConversion
     };
   }
+  merged.vttConversion = vttConversion;
 
   state.config = merged;
 }
@@ -2327,6 +2336,21 @@ function renderAlignmentState() {
   if (toolSelect) {
     toolSelect.value = state.config.autoAlignment.tool || 'auto';
   }
+
+  const vttToggle = document.getElementById('toggle-vtt-conversion');
+  const vttStatusText = document.getElementById('vtt-conversion-status-text');
+  const isVttEnabled = state.config.autoAlignment?.vttConversion !== undefined
+    ? Boolean(state.config.autoAlignment.vttConversion)
+    : (state.config.vttConversion !== undefined ? Boolean(state.config.vttConversion) : true);
+
+  if (vttToggle) {
+    vttToggle.checked = isVttEnabled;
+  }
+  if (vttStatusText) {
+    vttStatusText.textContent = isVttEnabled
+      ? 'When enabled, web/TV players receive clean WebVTT, while native MPV players receive styled ASS. When disabled, original raw styling is always delivered.'
+      : 'Conversion is disabled: original raw .ass/.ssa files will be delivered directly to all devices without conversion.';
+  }
 }
 
 async function checkAlignmentToolsStatus() {
@@ -2398,6 +2422,30 @@ function setupAlignmentActions() {
     if (!state.config.autoAlignment) state.config.autoAlignment = { enabled: true, sampleDurationMinutes: 2, timeoutSeconds: 5, tool: 'auto' };
     state.config.autoAlignment.tool = toolSelect.value || 'auto';
     notifyConfigChanged();
+  });
+
+  const vttToggle = document.getElementById('toggle-vtt-conversion');
+  const vttStatusText = document.getElementById('vtt-conversion-status-text');
+
+  vttToggle?.addEventListener('change', () => {
+    if (!state.config.autoAlignment) {
+      state.config.autoAlignment = { enabled: false, sampleDurationMinutes: 2, timeoutSeconds: 5, tool: 'auto', vttConversion: true };
+    }
+    state.config.autoAlignment.vttConversion = vttToggle.checked;
+    state.config.vttConversion = vttToggle.checked;
+
+    if (vttStatusText) {
+      vttStatusText.textContent = vttToggle.checked
+        ? 'When enabled, web/TV players receive clean WebVTT, while native MPV players receive styled ASS. When disabled, original raw styling is always delivered.'
+        : 'Conversion is disabled: original raw .ass/.ssa files will be delivered directly to all devices without conversion.';
+    }
+
+    notifyConfigChanged();
+    if (vttToggle.checked) {
+      showToast('Smart WebVTT conversion enabled');
+    } else {
+      showToast('Smart WebVTT conversion disabled (raw subtitles delivered)');
+    }
   });
 
   checkAlignmentToolsStatus();
