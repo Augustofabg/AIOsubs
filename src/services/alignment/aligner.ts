@@ -3,69 +3,21 @@ import path from 'path';
 import { spawn } from 'child_process';
 import { Logger } from '../../utils/logger';
 import { AlignmentToolStatus } from './types';
-import { isFfmpegAvailable, getFfmpegPath } from './audioExtractor';
+import {
+  getAlassPath,
+  getFfsubsyncPath,
+  isAlassAvailable,
+  isFfsubsyncAvailable,
+  getFfmpegPath,
+  isFfmpegAvailable
+} from './binaryResolver';
 
-export function getAlassPath(): string {
-  if (process.env.ALASS_PATH) return process.env.ALASS_PATH;
-  const isWin = process.platform === 'win32';
-  const localCandidates = isWin
-    ? ['alass.exe', 'alass-cli.exe', 'alass.bat']
-    : ['alass', 'alass-cli'];
-
-  for (const name of localCandidates) {
-    const localBin = path.join(process.cwd(), 'bin', name);
-    if (fs.existsSync(localBin)) return localBin;
-  }
-
-  return 'alass';
-}
-
-export function getFfsubsyncPath(): string {
-  if (process.env.FFSUBSYNC_PATH) return process.env.FFSUBSYNC_PATH;
-  const localBin = path.join(process.cwd(), 'bin', process.platform === 'win32' ? 'ffsubsync.exe' : 'ffsubsync');
-  if (fs.existsSync(localBin)) return localBin;
-  return 'ffsubsync';
-}
-
-function testBinaryExecution(bin: string, args: string[]): Promise<boolean> {
-  return new Promise((resolve) => {
-    try {
-      const proc = spawn(bin, args);
-      proc.on('error', () => resolve(false));
-      proc.on('close', (code) => resolve(code === 0));
-    } catch {
-      resolve(false);
-    }
-  });
-}
-
-export async function isAlassAvailable(): Promise<boolean> {
-  const currentPath = getAlassPath();
-  // 1. Try with --version
-  if (await testBinaryExecution(currentPath, ['--version'])) return true;
-  // 2. Try with --help
-  if (await testBinaryExecution(currentPath, ['--help'])) return true;
-
-  // 3. If standard 'alass' wasn't found in PATH, check 'alass-cli' in PATH
-  if (currentPath === 'alass') {
-    if (await testBinaryExecution('alass-cli', ['--version'])) return true;
-    if (await testBinaryExecution('alass-cli', ['--help'])) return true;
-  }
-
-  return false;
-}
-
-export function isFfsubsyncAvailable(): Promise<boolean> {
-  return new Promise((resolve) => {
-    try {
-      const proc = spawn(getFfsubsyncPath(), ['--version']);
-      proc.on('error', () => resolve(false));
-      proc.on('close', (code) => resolve(code === 0));
-    } catch {
-      resolve(false);
-    }
-  });
-}
+export {
+  getAlassPath,
+  getFfsubsyncPath,
+  isAlassAvailable,
+  isFfsubsyncAvailable
+};
 
 export async function detectAvailableTools(): Promise<AlignmentToolStatus> {
   const [ffmpegAvailable, alassAvailable, ffsubsyncAvailable] = await Promise.all([
@@ -74,7 +26,16 @@ export async function detectAvailableTools(): Promise<AlignmentToolStatus> {
     isFfsubsyncAvailable()
   ]);
 
+  const activeEngines: string[] = [];
+  if (ffmpegAvailable) activeEngines.push('ffmpeg');
+  if (alassAvailable) activeEngines.push('alass');
+  if (ffsubsyncAvailable) activeEngines.push('ffsubsync');
+
   return {
+    ffmpeg: ffmpegAvailable,
+    ffsubsync: ffsubsyncAvailable,
+    alass: alassAvailable,
+    activeEngines,
     ffmpegAvailable,
     alassAvailable,
     ffsubsyncAvailable,

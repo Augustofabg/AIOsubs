@@ -53,10 +53,14 @@ async function runTests() {
   // 2. Binary Tool Detection Test (Non-blocking)
   console.log('--- Test 2: Binary Detection (Non-blocking & Safe) ---');
   const tools = await detectAvailableTools();
+  assert(typeof tools.ffmpeg === 'boolean', 'ffmpeg must be boolean');
+  assert(typeof tools.alass === 'boolean', 'alass must be boolean');
+  assert(typeof tools.ffsubsync === 'boolean', 'ffsubsync must be boolean');
+  assert(Array.isArray(tools.activeEngines), 'activeEngines must be an array');
   assert(typeof tools.ffmpegAvailable === 'boolean', 'ffmpegAvailable must be boolean');
   assert(typeof tools.alassAvailable === 'boolean', 'alassAvailable must be boolean');
   assert(typeof tools.ffsubsyncAvailable === 'boolean', 'ffsubsyncAvailable must be boolean');
-  console.log(`Tools detected on host: ffmpeg=${tools.ffmpegAvailable}, alass=${tools.alassAvailable}, ffsubsync=${tools.ffsubsyncAvailable}`);
+  console.log(`Tools detected on host: ffmpeg=${tools.ffmpeg}, alass=${tools.alass}, ffsubsync=${tools.ffsubsync}, activeEngines=[${tools.activeEngines.join(', ')}]`);
   console.log('✅ Test 2 Passed: Detection runs safely without blocking or throwing.\n');
 
   // 3. Fallback Mechanism & Safety Timeout

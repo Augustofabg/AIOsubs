@@ -15,5 +15,8 @@ export const ENV = {
   RATE_LIMIT_MAX: parseInt(process.env.RATE_LIMIT_MAX || '150', 10),
   SUPABASE_URL: process.env.SUPABASE_URL || '',
   SUPABASE_KEY: process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '',
-  NODE_ENV: process.env.NODE_ENV || 'development'
+  NODE_ENV: process.env.NODE_ENV || 'development',
+  FFSUBSYNC_PATH: process.env.FFSUBSYNC_PATH || '',
+  ALASS_PATH: process.env.ALASS_PATH || '',
+  FFMPEG_PATH: process.env.FFMPEG_PATH || ''
 };

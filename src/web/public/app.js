@@ -2336,17 +2336,17 @@ async function checkAlignmentToolsStatus() {
     const res = await fetch('/api/alignment/status');
     if (res.ok) {
       const data = await res.json();
-      const detected = [];
-      if (data.ffmpegAvailable) detected.push('ffmpeg');
-      if (data.alassAvailable) detected.push('alass');
-      if (data.ffsubsyncAvailable) detected.push('ffsubsync');
+      const detected = Array.isArray(data.activeEngines) && data.activeEngines.length > 0
+        ? data.activeEngines
+        : [
+            (data.ffmpeg ?? data.ffmpegAvailable) ? 'ffmpeg' : null,
+            (data.alass ?? data.alassAvailable) ? 'alass' : null,
+            (data.ffsubsync ?? data.ffsubsyncAvailable) ? 'ffsubsync' : null
+          ].filter(Boolean);
 
-      if (detected.length >= 2 && data.ffmpegAvailable && (data.alassAvailable || data.ffsubsyncAvailable)) {
+      if (detected.length > 0) {
         badge.textContent = `Active engines: ${detected.join(', ')}`;
         badge.style.color = '#34d399';
-      } else if (detected.length > 0) {
-        badge.textContent = `Partial tools: ${detected.join(', ')} (fallback active if needed)`;
-        badge.style.color = '#fbbf24';
       } else {
         badge.textContent = 'Binaries not detected in PATH. Safe fallback mode enabled (original subtitles delivered without errors).';
         badge.style.color = '#94a3b8';

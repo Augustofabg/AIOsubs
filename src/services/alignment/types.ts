@@ -27,6 +27,10 @@ export interface AlignmentResult {
 }
 
 export interface AlignmentToolStatus {
+  ffmpeg: boolean;
+  ffsubsync: boolean;
+  alass: boolean;
+  activeEngines: string[];
   ffmpegAvailable: boolean;
   alassAvailable: boolean;
   ffsubsyncAvailable: boolean;

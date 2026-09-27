@@ -8,24 +8,8 @@ export interface AudioExtractionResult {
   outputWavPath: string;
 }
 
-export function getFfmpegPath(): string {
-  if (process.env.FFMPEG_PATH) return process.env.FFMPEG_PATH;
-  const localBin = path.join(process.cwd(), 'bin', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
-  if (fs.existsSync(localBin)) return localBin;
-  return 'ffmpeg';
-}
-
-export function isFfmpegAvailable(): Promise<boolean> {
-  return new Promise((resolve) => {
-    try {
-      const proc = spawn(getFfmpegPath(), ['-version']);
-      proc.on('error', () => resolve(false));
-      proc.on('close', (code) => resolve(code === 0));
-    } catch {
-      resolve(false);
-    }
-  });
-}
+import { getFfmpegPath, isFfmpegAvailable } from './binaryResolver';
+export { getFfmpegPath, isFfmpegAvailable };
 
 export async function extractReferenceAudio(
   videoUrl: string,
