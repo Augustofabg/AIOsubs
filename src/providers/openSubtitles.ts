@@ -1,6 +1,7 @@
 import { BaseSubtitleProvider } from './base';
 import { SubtitleQuery, ProviderContext, RawSubtitleItem } from '../types/provider';
 import { ENV } from '../config/env';
+import { mapWhitelistToOpenSubtitles } from '../utils/languages';
 
 interface OpenSubtitlesRestItem {
   id: string;
@@ -55,7 +56,11 @@ export class OpenSubtitlesProvider extends BaseSubtitleProvider {
       imdb_id: cleanImdb
     };
 
-    if (query.season !== null && query.episode !== null) {
+    if (query.type === 'series' && query.season !== null && query.episode !== null) {
+      params.season_number = query.season;
+      params.episode_number = query.episode;
+      params.type = 'episode';
+    } else if (query.season !== null && query.episode !== null) {
       params.season_number = query.season;
       params.episode_number = query.episode;
       params.type = 'episode';
@@ -63,9 +68,13 @@ export class OpenSubtitlesProvider extends BaseSubtitleProvider {
       params.type = 'movie';
     }
 
-    // Native language filter: convert whitelist into comma separated string
-    if (context.config.languages && context.config.languages.length > 0) {
-      params.languages = context.config.languages.join(',');
+    // Native language filter: convert whitelist into OpenSubtitles API v1 format
+    const effectiveLangs = (context.config.languages && context.config.languages.length > 0)
+      ? context.config.languages
+      : ['pob', 'eng'];
+    const osLangs = mapWhitelistToOpenSubtitles(effectiveLangs);
+    if (osLangs.length > 0) {
+      params.languages = osLangs.join(',');
     }
 
     const response = await this.httpGet<OpenSubtitlesRestResponse>(

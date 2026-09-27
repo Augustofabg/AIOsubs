@@ -254,8 +254,8 @@ export function createServer(): express.Application {
 
         const response = await axios.get('https://api.opensubtitles.com/api/v1/subtitles', {
           params: {
-            query: 'matrix',
-            languages: 'en'
+            imdb_id: '0133093',
+            _t: Date.now()
           },
           headers: {
             'Api-Key': apiKey,
