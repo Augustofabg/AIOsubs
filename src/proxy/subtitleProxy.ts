@@ -290,6 +290,12 @@ export async function handleUnifiedSubtitleProxy(req: Request, res: Response): P
     const detectedFormat = extraction.format;
     const effectiveFormat = detectedFormat || preferredFormat;
 
+    if (extraction.isArchive) {
+      Logger.info(`[ArchiveExtractor] ✅ Extraído "${finalFilename}" de pacote compactado (${queryType || 'media'} S${querySeason || 1}E${queryEpisode || 1})`);
+      res.setHeader('X-Archive-Extracted', 'true');
+      res.setHeader('X-Extracted-Filename', encodeURIComponent(finalFilename));
+    }
+
     const utf8Text = toCleanUtf8(cleanBuffer);
 
     // Smart conditional ASS/SSA to WebVTT conversion
@@ -301,6 +307,8 @@ export async function handleUnifiedSubtitleProxy(req: Request, res: Response): P
 
       if (isVttConversionDisabled) {
         // VTT conversion disabled by user configuration: deliver raw ASS/SSA directly
+        Logger.info(`[VTT Converter] ⏭️ Conversão desativada pelo usuário: entregando ASS/SSA bruto (${finalFilename})`);
+        res.setHeader('X-Vtt-Converted', 'false; reason=disabled_by_user');
         sendSubtitleResponse(res, utf8Text, 'ass', finalFilename);
         return;
       }
@@ -309,11 +317,15 @@ export async function handleUnifiedSubtitleProxy(req: Request, res: Response): P
 
       if (nativeAssSupported && req.query.format !== 'vtt') {
         // Device/player natively supports ASS styling (e.g. Stremio Desktop with MPV)
+        Logger.info(`[VTT Converter] ⏭️ Cliente com suporte nativo a ASS detectado: entregando ASS/SSA estilizado (${finalFilename})`);
+        res.setHeader('X-Vtt-Converted', 'false; reason=native_client_mpv');
         sendSubtitleResponse(res, utf8Text, 'ass', finalFilename);
         return;
       }
 
       // Convert ASS/SSA to clean WebVTT for browsers, smart TVs, and web players
+      Logger.info(`[VTT Converter] 🔄 Convertido ASS/SSA -> WebVTT para cliente Web/TV (${finalFilename})`);
+      res.setHeader('X-Vtt-Converted', 'true');
       const vttContent = convertAssToVtt(utf8Text);
       const vttFilename = finalFilename.replace(/\.(ass|ssa)$/i, '.vtt');
       sendSubtitleResponse(res, vttContent, 'vtt', vttFilename);
@@ -475,15 +487,21 @@ export async function handleOpenSubtitlesRestDownload(req: Request, res: Respons
 
       if (isVttConversionDisabled) {
         // VTT conversion disabled by user configuration: deliver raw ASS/SSA directly
+        Logger.info(`[VTT Converter] ⏭️ Conversão desativada pelo usuário: entregando ASS/SSA bruto (${finalFilename})`);
+        res.setHeader('X-Vtt-Converted', 'false; reason=disabled_by_user');
         sendSubtitleResponse(res, utf8Text, 'ass', finalFilename);
         return;
       }
 
       const nativeAssSupported = clientSupportsNativeAss(req.headers['user-agent'], req.query.client as string);
       if (nativeAssSupported && req.query.format !== 'vtt') {
+        Logger.info(`[VTT Converter] ⏭️ Cliente com suporte nativo a ASS detectado: entregando ASS/SSA estilizado (${finalFilename})`);
+        res.setHeader('X-Vtt-Converted', 'false; reason=native_client_mpv');
         sendSubtitleResponse(res, utf8Text, 'ass', finalFilename);
         return;
       }
+      Logger.info(`[VTT Converter] 🔄 Convertido ASS/SSA -> WebVTT para cliente Web/TV (${finalFilename})`);
+      res.setHeader('X-Vtt-Converted', 'true');
       const vttContent = convertAssToVtt(utf8Text);
       const vttFilename = finalFilename.replace(/\.(ass|ssa)$/i, '.vtt');
       sendSubtitleResponse(res, vttContent, 'vtt', vttFilename);

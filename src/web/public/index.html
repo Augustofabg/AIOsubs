@@ -854,51 +854,51 @@
                   </div>
                 </div>
 
-                <!-- Card: Smart WebVTT (.vtt) Conversion -->
-                <div class="filters-tab-pane" id="pane-filter-alignment">
-                  <div class="panel-header-row">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                      <h2 class="panel-title" style="margin-bottom: 0;">AUTO SUBTITLE CONVERSION</h2>
-                      <span class="badge-experimental">EXPERIMENTAL</span>
-                    </div>
-                    <p class="panel-subtitle">Convert stylized subtitles to WebVTT for all web players.</p>
+                <!-- SECTION: AUTO SUBTITLE CONVERSION -->
+                <div class="panel-header-row" style="margin-top: 28px;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <h2 class="panel-title" style="margin-bottom: 0;">AUTO SUBTITLE CONVERSION</h2>
+                    <span class="badge-experimental">EXPERIMENTAL</span>
                   </div>
+                  <p class="panel-subtitle">Convert stylized subtitles to WebVTT for all web players.</p>
+                </div>
 
-                  <div class="card card-filter-pane card-vtt-conversion-settings"
-                    style="padding: 20px 24px; margin-top: 16px;">
-                    <div class="alignment-toggle-row"
-                      style="display: flex; align-items: center; justify-content: space-between;">
-                      <div class="alignment-toggle-info">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                          <div style="font-weight: 600; font-size: 14px; color: #fff;">Smart WebVTT (.vtt) Conversion
-                            <div style="font-size: 12px; color: var(--text-secondary); margin-top: 3px;">
-                              Automatically convert stylized subtitles (.ass, .ssa) to WebVTT (.vtt) for web browsers,
-                              smart
-                              TVs, and mobile players lacking native MPV support.
-                            </div>
-                          </div>
-                          <label class="compact-switch" title="Toggle WebVTT Conversion">
-                            <input type="checkbox" id="toggle-vtt-conversion" checked>
-                            <span class="compact-slider"></span>
-                          </label>
-                        </div>
-                        <div id="vtt-conversion-status-hint"
-                          style="margin-top: 12px; font-size: 11px; color: #94a3b8; display: flex; align-items: center; gap: 6px;">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="12" y1="16" x2="12" y2="12"></line>
-                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                          </svg>
-                          <span id="vtt-conversion-status-text">When enabled, web/TV players receive clean WebVTT, while
-                            native MPV players receive styled ASS. When disabled, original raw styling is always
-                            delivered.</span>
-                        </div>
+                <div class="card card-filter-pane card-vtt-conversion-settings"
+                  style="padding: 20px 24px; margin-top: 16px;">
+                  <div class="alignment-toggle-row"
+                    style="display: flex; align-items: center; justify-content: space-between;">
+                    <div class="alignment-toggle-info">
+                      <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="font-weight: 600; font-size: 14px; color: #fff;">Smart WebVTT (.vtt) Conversion</div>
+                        <span class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">Universal</span>
+                      </div>
+                      <div style="font-size: 12px; color: var(--text-secondary); margin-top: 3px;">
+                        Automatically convert stylized subtitles (.ass, .ssa) to WebVTT (.vtt) for web browsers, smart
+                        TVs, and mobile players lacking native MPV support.
                       </div>
                     </div>
-
+                    <label class="compact-switch" title="Toggle WebVTT Conversion">
+                      <input type="checkbox" id="toggle-vtt-conversion" checked>
+                      <span class="compact-slider"></span>
+                    </label>
+                  </div>
+                  <div id="vtt-conversion-status-hint"
+                    style="margin-top: 12px; font-size: 11px; color: #94a3b8; display: flex; align-items: center; gap: 6px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="16" x2="12" y2="12"></line>
+                      <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                    <span id="vtt-conversion-status-text">When enabled, web/TV players receive clean WebVTT, while
+                      native MPV players receive styled ASS. When disabled, original raw styling is always
+                      delivered.</span>
                   </div>
                 </div>
+              </div>
+
+            </div>
+          </div>
         </section>
 
         <!-- Page 5: Formatter -->

@@ -237,6 +237,7 @@ Dialogue: 0,0:01:30.00,0:01:33.00,Default,,0,0,0,,{\\i1}Fala em itálico com ví
     );
     assert.strictEqual(zipProxyRes.status, 200);
     assert.strictEqual(zipProxyRes.headers.get('access-control-allow-origin'), '*');
+    assert.strictEqual(zipProxyRes.headers.get('x-archive-extracted'), 'true');
     assert(zipProxyRes.headers.get('content-type')?.includes('text/plain'));
     const zipProxyText = await zipProxyRes.text();
     assert(zipProxyText.includes('Episode 4 (S01E04)'), 'Proxied subtitle must contain extracted S01E04 content');
@@ -252,6 +253,7 @@ Dialogue: 0,0:01:30.00,0:01:33.00,Default,,0,0,0,,{\\i1}Fala em itálico com ví
       }
     );
     assert.strictEqual(browserRes.status, 200);
+    assert.strictEqual(browserRes.headers.get('x-vtt-converted'), 'true');
     assert(browserRes.headers.get('content-type')?.includes('text/vtt'), 'Browser client must receive text/vtt');
     const browserVtt = await browserRes.text();
     assert(browserVtt.startsWith('WEBVTT'), 'Converted content must begin with WEBVTT');
@@ -268,6 +270,7 @@ Dialogue: 0,0:01:30.00,0:01:33.00,Default,,0,0,0,,{\\i1}Fala em itálico com ví
       }
     );
     assert.strictEqual(mpvRes.status, 200);
+    assert(mpvRes.headers.get('x-vtt-converted')?.includes('native_client_mpv'));
     assert(mpvRes.headers.get('content-type')?.includes('text/x-ssa'), 'MPV desktop client must receive text/x-ssa');
     const mpvText = await mpvRes.text();
     assert(mpvText.includes('[Script Info]'), 'Native desktop client receives raw ASS styling intact');
@@ -291,6 +294,7 @@ Dialogue: 0,0:01:30.00,0:01:33.00,Default,,0,0,0,,{\\i1}Fala em itálico com ví
       }
     );
     assert.strictEqual(disabledVttRes.status, 200);
+    assert(disabledVttRes.headers.get('x-vtt-converted')?.includes('disabled_by_user'));
     assert(disabledVttRes.headers.get('content-type')?.includes('text/x-ssa'), 'Disabled VTT conversion must return text/x-ssa even to web browsers');
     const disabledVttText = await disabledVttRes.text();
     assert(disabledVttText.includes('[Script Info]'), 'Original raw ASS styling must be preserved when VTT conversion is deactivated');
