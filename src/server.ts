@@ -9,13 +9,13 @@ import QRCode from 'qrcode';
 import { ENV } from './config/env';
 import { StremioManifest } from './types/stremio';
 import { decodeUserConfig, decodeUserConfigAsync } from './config/userConfig';
-import { parseSubtitleQuery, getAggregatedSubtitles } from './core/aggregator';
-import { handleSubtitleProxy, handleOpenSubtitlesRestDownload, handleShortIdDownload } from './proxy/subtitleProxy';
-import { SUPPORTED_LANGUAGES } from './utils/languages';
+import { handleSubtitleProxy, handleOpenSubtitlesRestDownload, handleShortIdDownload, handleUnifiedSubtitleProxy } from './proxy/subtitleProxy';
 import { getAllProviders } from './providers';
 import { globalSubtitleCache } from './utils/cache';
 import { Logger } from './utils/logger';
 import { configStorage, isUuid } from './storage/configStore';
+import { parseSubtitleQuery, getAggregatedSubtitles } from './core/aggregator';
+import { SUPPORTED_LANGUAGES } from './utils/languages';
 
 export function createServer(): express.Application {
   const app = express();
@@ -113,7 +113,12 @@ export function createServer(): express.Application {
   app.get('/health', healthHandler);
   app.get('/api/health', healthHandler);
 
-  app.use('/:config', express.static(publicDir, { index: false }));
+  app.use('/:config', (req: Request, res: Response, next: NextFunction) => {
+    if (['manifest.json', 'subtitles', 'api', 'sub', 'proxy', 'download', 'health', 'assets'].includes(req.params.config)) {
+      return next();
+    }
+    return express.static(publicDir, { index: false })(req, res, next);
+  });
 
   app.get('/api/languages', (_req: Request, res: Response) => {
     res.json({ languages: SUPPORTED_LANGUAGES });
@@ -465,15 +470,21 @@ app.get('/:config/subtitles/:type/:id/:extra.json', handleSubtitles);
 app.get('/subtitles/:type/:id.json', handleSubtitles);
 app.get('/subtitles/:type/:id/:extra.json', handleSubtitles);
 
+// Unified and legacy subtitle proxy delivery endpoints
+app.get('/sub/proxy', handleUnifiedSubtitleProxy);
+app.get('/sub/proxy/:data', handleSubtitleProxy);
+app.get('/sub/download', handleUnifiedSubtitleProxy);
+app.get('/proxy/download', handleUnifiedSubtitleProxy);
+app.get('/proxy/download/subdl', handleUnifiedSubtitleProxy);
+app.get('/proxy/download/subsource', handleUnifiedSubtitleProxy);
+app.get('/proxy/subtitle/:data', handleSubtitleProxy);
+app.get('/proxy/download/os-rest/:fileId', handleOpenSubtitlesRestDownload);
+
 // Direct subtitle download endpoints
 app.get('/download/:id', handleShortIdDownload);
 app.get('/download/:id/:filename', handleShortIdDownload);
 app.get('/sub/:id', handleShortIdDownload);
 app.get('/sub/:id/:filename', handleShortIdDownload);
-
-// Backward compatibility proxy endpoints
-app.get('/proxy/subtitle/:data', handleSubtitleProxy);
-app.get('/proxy/download/os-rest/:fileId', handleOpenSubtitlesRestDownload);
 
 app.use((req: Request, res: Response) => {
   res.status(404).json({ error: 'Endpoint not found', path: req.path });

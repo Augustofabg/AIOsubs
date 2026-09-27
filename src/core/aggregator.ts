@@ -127,6 +127,14 @@ export async function getAggregatedSubtitles(
     let finalUrl = item.url;
     if (finalUrl.startsWith('/')) {
       finalUrl = `${baseUrl}${finalUrl}`;
+    } else if (finalUrl.startsWith('http://') || finalUrl.startsWith('https://')) {
+      // If external URL ends with .zip or is an archive, route through /sub/proxy to decompress and serve valid text
+      if (/\.zip($|\?)/i.test(finalUrl)) {
+        const ext = item.format === 'vtt' || finalUrl.toLowerCase().endsWith('.vtt') ? '.vtt' : '.srt';
+        const safeBaseName = (item.release || item.id).replace(/[^a-zA-Z0-9._-]/g, '_');
+        const safeFilename = safeBaseName.endsWith(ext) ? safeBaseName : `${safeBaseName}${ext}`;
+        finalUrl = `${baseUrl}/sub/proxy?url=${encodeURIComponent(finalUrl)}&filename=${encodeURIComponent(safeFilename)}`;
+      }
     }
 
     const displayTitle = item.release || `${item.providerName || item.provider} Subtitle`;

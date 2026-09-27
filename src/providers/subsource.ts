@@ -88,11 +88,13 @@ export class SubsourceProvider extends BaseSubtitleProvider {
 
       if (!downloadUrl) continue;
 
+      const proxyUrl = `/sub/proxy?url=${encodeURIComponent(downloadUrl)}&filename=${encodeURIComponent(releaseName + '.srt')}&provider=subsource`;
+
       items.push({
         id: `subsource-${sub.id || sub.subId || Math.random().toString(36).substring(2, 9)}`,
         provider: this.id,
         providerName: 'Subsource',
-        url: downloadUrl,
+        url: proxyUrl,
         lang: rawLang,
         release: releaseName,
         format: 'srt',

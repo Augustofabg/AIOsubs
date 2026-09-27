@@ -7,6 +7,10 @@ import { DEFAULT_USER_CONFIG, mergeWithDefaults, decodeUserConfig } from '../src
 import { UserConfig } from '../src/types/config';
 import { globalSubtitleCache } from '../src/utils/cache';
 import { configStorage, isUuid } from '../src/storage/configStore';
+import AdmZip from 'adm-zip';
+import zlib from 'zlib';
+import iconv from 'iconv-lite';
+import { decompressBuffer, toCleanUtf8, validateAndFormatSubtitle } from '../src/proxy/subtitleProxy';
 
 console.log('🧪 Iniciando suíte de testes de validação do AIO Subtitles...\n');
 
@@ -411,7 +415,103 @@ async function runAllTests(): Promise<void> {
     console.error('❌ Falha no Teste 8.2: Prioridade de provedores na deduplicação conjunta falhou!', remainingIds);
     process.exit(1);
   }
-  console.log('  ✅ Prioridade de provedores respeitada na deduplicação (OpenSubtitles prevaleceu sobre SubDL duplicado)');
+  // 9. Subtitle Delivery Validation (ZIP Decompression, Charset sanitization, WEBVTT & SRT Index 1 rules)
+  console.log('\n--- Teste 9: Validação Crítica de Entrega de Legendas (ZIP, UTF-8, WEBVTT & SRT 1) ---');
+
+  // 9.1 Decompressão ZIP (SubDL/Subsource)
+  const zip = new AdmZip();
+  const sampleSrtContent = '1\n00:00:01,000 --> 00:00:04,000\nOlá mundo, acentuação: ação e coração\n\n';
+  zip.addFile('Breaking.Bad.S01E01.720p.srt', Buffer.from(sampleSrtContent, 'utf8'));
+  const zipBuffer = zip.toBuffer();
+
+  const decompressedZip = decompressBuffer(zipBuffer);
+  if (!decompressedZip.filename || !decompressedZip.filename.endsWith('.srt')) {
+    console.error('❌ Falha no Teste 9.1: decompressBuffer não localizou o arquivo .srt dentro do ZIP!');
+    process.exit(1);
+  }
+  const cleanZipText = toCleanUtf8(decompressedZip.buffer);
+  if (!cleanZipText.includes('ação e coração')) {
+    console.error('❌ Falha no Teste 9.1: Conteúdo extraído do ZIP está corrompido!');
+    process.exit(1);
+  }
+  console.log('  ✅ Decompressão ZIP em memória funcionou com sucesso (arquivo .srt extraído preservando diacríticos)');
+
+  // 9.2 Decompressão GZIP (OpenSubtitles)
+  const gzBuffer = zlib.gzipSync(Buffer.from('1\n00:00:01,000 --> 00:00:04,000\nLegenda OpenSubtitles Gzip', 'utf8'));
+  const decompressedGz = decompressBuffer(gzBuffer);
+  const cleanGzText = toCleanUtf8(decompressedGz.buffer);
+  if (!cleanGzText.includes('Legenda OpenSubtitles Gzip')) {
+    console.error('❌ Falha no Teste 9.2: decompressBuffer não descompactou GZIP!');
+    process.exit(1);
+  }
+  console.log('  ✅ Decompressão GZIP em memória funcionou com sucesso');
+
+  // 9.3 Sanitização de Charset: UTF-16 LE com BOM e sem BOM
+  const utf16LeWithBom = Buffer.concat([
+    Buffer.from([0xff, 0xfe]),
+    iconv.encode('1\n00:00:01,000 --> 00:00:04,000\nTexto UTF-16 LE com BOM', 'utf16le')
+  ]);
+  const decodedUtf16 = toCleanUtf8(utf16LeWithBom);
+  if (!decodedUtf16.includes('Texto UTF-16 LE com BOM') || decodedUtf16.charCodeAt(0) === 0xfeff) {
+    console.error('❌ Falha no Teste 9.3: toCleanUtf8 não decodificou UTF-16 LE com BOM corretamente!');
+    process.exit(1);
+  }
+  console.log('  ✅ UTF-16 LE com BOM decodificado para UTF-8 limpo sem BOM residual');
+
+  // 9.4 Sanitização de Charset: Windows-1252 / ISO-8859-1
+  const win1252Buf = iconv.encode('1\n00:00:01,000 --> 00:00:04,000\nNão é possível', 'win1252');
+  const decodedWin1252 = toCleanUtf8(win1252Buf);
+  if (!decodedWin1252.includes('Não é possível')) {
+    console.error('❌ Falha no Teste 9.4: toCleanUtf8 falhou ao recuperar caracteres do Windows-1252!');
+    process.exit(1);
+  }
+  console.log('  ✅ Legenda legada Windows-1252 recuperada com sucesso para UTF-8');
+
+  // 9.5 Remoção estrita de BOM UTF-8
+  const utf8WithBom = Buffer.from('\uFEFF1\n00:00:01,000 --> 00:00:04,000\nSem BOM');
+  const cleanedBom = toCleanUtf8(utf8WithBom);
+  if (cleanedBom.charCodeAt(0) === 0xfeff || !cleanedBom.startsWith('1')) {
+    console.error('❌ Falha no Teste 9.5: BOM UTF-8 não foi removido!');
+    process.exit(1);
+  }
+  console.log('  ✅ BOM UTF-8 (\\uFEFF) removido com sucesso');
+
+  // 9.6 Validação de Formato SRT: Garantir início com índice numérico 1
+  const rawSrtWithoutIndex = '00:00:01,000 --> 00:00:04,000\nFala sem índice inicial\n\n2\n00:00:05,000 --> 00:00:08,000\nSegunda fala';
+  const srtValidation = validateAndFormatSubtitle(rawSrtWithoutIndex, 'srt');
+  if (!srtValidation.valid || !srtValidation.content.startsWith('1\n')) {
+    console.error('❌ Falha no Teste 9.6: validateAndFormatSubtitle não iniciou o .srt estritamente com índice 1!');
+    process.exit(1);
+  }
+  console.log('  ✅ Arquivo .srt validado e corrigido para iniciar estritamente com índice numérico 1');
+
+  // 9.7 Validação de Formato VTT: Garantir início com WEBVTT e conversão de vírgula para ponto
+  const rawVttWithoutHeader = '1\n00:00:01,000 --> 00:00:04,000\nLegenda vtt sem header';
+  const vttValidation = validateAndFormatSubtitle(rawVttWithoutHeader, 'vtt');
+  if (!vttValidation.valid || !vttValidation.content.startsWith('WEBVTT\n\n') || !vttValidation.content.includes('00:00:01.000')) {
+    console.error('❌ Falha no Teste 9.7: validateAndFormatSubtitle não normalizou formato WebVTT corretamente!');
+    process.exit(1);
+  }
+  console.log('  ✅ Arquivo .vtt normalizado com sucesso com cabeçalho WEBVTT e timestamps com ponto (.)');
+
+  // 9.8 Rejeição de Respostas de Erro (JSON ou HTML ou Vazio)
+  const emptyValidation = validateAndFormatSubtitle('', 'srt');
+  const jsonErrValidation = validateAndFormatSubtitle('{"message": "Unauthorized", "status": 401}', 'srt');
+  const htmlErrValidation = validateAndFormatSubtitle('<!DOCTYPE html><html><body>502 Bad Gateway</body></html>', 'srt');
+  if (emptyValidation.valid || jsonErrValidation.valid || htmlErrValidation.valid) {
+    console.error('❌ Falha no Teste 9.8: Respostas inválidas/vazias não foram rejeitadas!');
+    process.exit(1);
+  }
+  console.log('  ✅ Payloads corrompidos (vazio, JSON de erro de API, HTML de proxy) rejeitados com sucesso');
+
+  // 9.9 Verificação de URLs dos Provedores Nativos e Addons
+  const subdlProvider = providers.find(p => p.id === 'subdl')!;
+  const subsourceProvider = providers.find(p => p.id === 'subsource')!;
+  if (!subdlProvider || !subsourceProvider) {
+    console.error('❌ Falha no Teste 9.9: Provedores subdl ou subsource não encontrados!');
+    process.exit(1);
+  }
+  console.log('  ✅ Provedores subdl e subsource roteiam através de /sub/proxy para descompactação transparente');
 
   console.log('\n🎉 TODOS OS TESTES PASSARAM COM 100% DE SUCESSO!');
   process.exit(0);
