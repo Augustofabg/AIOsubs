@@ -47,6 +47,12 @@ const DEFAULT_CONFIG = {
     'pt': 'pob',
     'pt-pt': 'pob'
   },
+  language_remapping: {
+    'por': 'pob',
+    'pt-br': 'pob',
+    'pt': 'pob',
+    'pt-pt': 'pob'
+  },
   providerTimeoutMs: 6000,
   deduplication: true,
   deduplicationStrategy: 'both',
@@ -108,6 +114,8 @@ const state = {
   config: JSON.parse(JSON.stringify(DEFAULT_CONFIG)),
   lastSavedConfigJson: '',
   languagesList: FALLBACK_LANGUAGES,
+  remapFromSelection: { code: '', name: '', flag: '' },
+  remapToSelection: { code: '', name: '', flag: '' },
   validatedKeys: {}, // { [serviceId]: boolean }
   validationDebounceTimer: null
 };
@@ -429,8 +437,12 @@ function applyConfigWithMigration(parsed) {
     merged.allowUnknownLanguages = parsed.allowUnknownLanguages;
   }
 
-  if (parsed.languageRemap && typeof parsed.languageRemap === 'object') {
-    merged.languageRemap = { ...parsed.languageRemap };
+  const remapData = (parsed.language_remapping && typeof parsed.language_remapping === 'object')
+    ? parsed.language_remapping
+    : ((parsed.languageRemap && typeof parsed.languageRemap === 'object') ? parsed.languageRemap : null);
+  if (remapData) {
+    merged.language_remapping = { ...remapData };
+    merged.languageRemap = { ...remapData };
   }
 
   if (typeof parsed.providerTimeoutMs === 'number') {
@@ -1333,28 +1345,7 @@ function setupFiltersActions() {
     });
   }
 
-    document.getElementById('btn-add-remap')?.addEventListener('click', () => {
-    const fromInput = document.getElementById('input-remap-from');
-    const toInput = document.getElementById('input-remap-to');
-    const fromVal = fromInput ? fromInput.value.trim().toLowerCase() : '';
-    const toVal = toInput ? toInput.value.trim().toLowerCase() : '';
-
-    if (!fromVal || !toVal) {
-      alert('Please provide both source and target language codes for remapping (e.g. pt-br → pob).');
-      return;
-    }
-
-    if (!state.config.languageRemap) {
-      state.config.languageRemap = {};
-    }
-    state.config.languageRemap[fromVal] = toVal;
-    if (fromInput) fromInput.value = '';
-    if (toInput) toInput.value = '';
-
-    renderRemapTable();
-    notifyConfigChanged();
-    showToast(`Regra "${fromVal} → ${toVal}" adicionada.`);
-  });
+  setupLanguageRemappingUI();
 
     const toggleDedup = document.getElementById('toggle-deduplication');
   const dedupStrategyRow = document.getElementById('dedup-strategy-row');
@@ -1446,11 +1437,15 @@ function setupCustomSelect(wrapId, hiddenInputId, onChange) {
   });
 }
 
-// Global click handler to close open custom selects
+// Global click handler to close open custom selects and remap dropdowns
 document.addEventListener('click', () => {
   document.querySelectorAll('.custom-select-wrap.open').forEach(w => {
     w.classList.remove('open');
     w.querySelector('.custom-select-trigger')?.setAttribute('aria-expanded', 'false');
+  });
+  document.querySelectorAll('.remap-searchable-select.open').forEach(w => {
+    w.classList.remove('open');
+    w.querySelector('.remap-select-trigger')?.setAttribute('aria-expanded', 'false');
   });
 });
 
@@ -1503,7 +1498,7 @@ function triggerTabRender(tabId) {
     renderWhitelistTags();
     renderLanguageChips(document.getElementById('search-languages')?.value || '');
   } else if (tabId === 'remap-dedup') {
-    renderRemapTable();
+    renderRemapList();
   } else if (tabId === 'priority') {
     renderFiltersPriority();
   }
@@ -1613,41 +1608,316 @@ function renderLanguageChips(filterQuery = '') {
   });
 }
 
-function renderRemapTable() {
-  const tbody = document.getElementById('remap-table-body');
-  if (!tbody) return;
+function getLanguageInfo(code) {
+  if (!code) return null;
+  const clean = code.trim().toLowerCase();
+  const list = state.languagesList || FALLBACK_LANGUAGES;
 
-  tbody.innerHTML = '';
-  const remap = state.config.languageRemap || {};
-  const entries = Object.entries(remap);
+  const direct = list.find(l => l.code && l.code.toLowerCase() === clean);
+  if (direct) {
+    return {
+      code: clean,
+      name: direct.name || clean.toUpperCase(),
+      flag: direct.flag || '🌐'
+    };
+  }
 
-  if (entries.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 14px;">No rules configured. Add remapping rules below (e.g. por → pob).</td></tr>`;
+  const aliasMatch = list.find(l => {
+    if (l.aliases && Array.isArray(l.aliases)) {
+      return l.aliases.some(a => a.toLowerCase() === clean);
+    }
+    return false;
+  });
+  if (aliasMatch) {
+    return {
+      code: clean,
+      name: aliasMatch.name,
+      flag: aliasMatch.flag || '🌐'
+    };
+  }
+
+  return {
+    code: clean,
+    name: clean.toUpperCase(),
+    flag: '🌐'
+  };
+}
+
+function resetRemapDropdown(type) {
+  if (type === 'from') {
+    state.remapFromSelection = { code: '', name: '', flag: '' };
+    const valEl = document.getElementById('val-remap-from');
+    if (valEl) {
+      valEl.innerHTML = '<span class="remap-placeholder">Select source language...</span>';
+    }
+  } else {
+    state.remapToSelection = { code: '', name: '', flag: '' };
+    const valEl = document.getElementById('val-remap-to');
+    if (valEl) {
+      valEl.innerHTML = '<span class="remap-placeholder">Select target language...</span>';
+    }
+  }
+  const searchInput = document.getElementById(`search-remap-${type}`);
+  if (searchInput) searchInput.value = '';
+}
+
+function setRemapSelection(type, lang) {
+  if (!lang || !lang.code) return;
+  const cleanCode = lang.code.trim().toLowerCase();
+  const info = getLanguageInfo(cleanCode) || lang;
+
+  if (type === 'from') {
+    state.remapFromSelection = {
+      code: cleanCode,
+      name: info.name || cleanCode,
+      flag: info.flag || '🌐'
+    };
+    const valEl = document.getElementById('val-remap-from');
+    if (valEl) {
+      valEl.innerHTML = `
+        <span class="remap-option-flag">${info.flag || '🌐'}</span>
+        <span class="remap-option-name">${escapeHtml(info.name || cleanCode)}</span>
+        <span class="remap-option-code">(${escapeHtml(cleanCode)})</span>
+      `;
+    }
+  } else {
+    state.remapToSelection = {
+      code: cleanCode,
+      name: info.name || cleanCode,
+      flag: info.flag || '🌐'
+    };
+    const valEl = document.getElementById('val-remap-to');
+    if (valEl) {
+      valEl.innerHTML = `
+        <span class="remap-option-flag">${info.flag || '🌐'}</span>
+        <span class="remap-option-name">${escapeHtml(info.name || cleanCode)}</span>
+        <span class="remap-option-code">(${escapeHtml(cleanCode)})</span>
+      `;
+    }
+  }
+
+  const wrap = document.getElementById(`wrap-remap-${type}`);
+  if (wrap) wrap.classList.remove('open');
+  const trigger = document.getElementById(`trigger-remap-${type}`);
+  if (trigger) trigger.setAttribute('aria-expanded', 'false');
+}
+
+function renderRemapDropdownOptions(type, query = '') {
+  const container = document.getElementById(`options-remap-${type}`);
+  if (!container) return;
+
+  const currentSelection = (type === 'from' ? state.remapFromSelection?.code : state.remapToSelection?.code) || '';
+  const q = (query || '').toLowerCase().trim();
+  const list = state.languagesList || FALLBACK_LANGUAGES;
+
+  let filtered = list;
+  if (q) {
+    filtered = list.filter(l => {
+      const codeMatch = l.code && l.code.toLowerCase().includes(q);
+      const nameMatch = l.name && l.name.toLowerCase().includes(q);
+      const nativeMatch = l.nativeName && l.nativeName.toLowerCase().includes(q);
+      const aliasMatch = Array.isArray(l.aliases) && l.aliases.some(a => a.toLowerCase().includes(q));
+      return codeMatch || nameMatch || nativeMatch || aliasMatch;
+    });
+  }
+
+  container.innerHTML = '';
+
+  if (q && !list.some(l => l.code && l.code.toLowerCase() === q)) {
+    const customItem = document.createElement('div');
+    customItem.className = 'remap-option-item remap-option-custom';
+    customItem.innerHTML = `
+      <div class="remap-option-left">
+        <span class="remap-option-flag">✨</span>
+        <span class="remap-option-name">Use custom code: <strong>"${escapeHtml(q)}"</strong></span>
+      </div>
+      <span class="remap-option-code">${escapeHtml(q)}</span>
+    `;
+    customItem.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setRemapSelection(type, { code: q, name: q.toUpperCase(), flag: '🌐' });
+    });
+    container.appendChild(customItem);
+  }
+
+  if (filtered.length === 0 && !q) {
+    container.innerHTML = '<div style="padding: 10px; color: var(--text-muted); font-size: 11.5px; text-align: center;">No languages available.</div>';
     return;
   }
 
-  entries.forEach(([from, to]) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><span class="remap-code-badge">${escapeHtml(from)}</span></td>
-      <td style="color: var(--text-muted); text-align: center; vertical-align: middle;">${MDI_ICONS.arrowRight}</td>
-      <td><span class="remap-code-badge">${escapeHtml(to)}</span></td>
-      <td style="text-align: right;">
-        <button class="btn-addon-action delete" title="Delete rule" type="button">${MDI_ICONS.trash}</button>
-      </td>
+  filtered.forEach(l => {
+    const isSelected = l.code.toLowerCase() === currentSelection.toLowerCase();
+    const item = document.createElement('div');
+    item.className = `remap-option-item ${isSelected ? 'selected' : ''}`;
+    item.innerHTML = `
+      <div class="remap-option-left">
+        <span class="remap-option-flag">${l.flag || '🌐'}</span>
+        <span class="remap-option-name">${escapeHtml(l.name || l.code)}</span>
+      </div>
+      <span class="remap-option-code">(${escapeHtml(l.code.toLowerCase())})</span>
     `;
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setRemapSelection(type, l);
+    });
+    container.appendChild(item);
+  });
+}
 
-    tr.querySelector('.delete').addEventListener('click', () => {
-      tr.classList.add('row-fade-out');
-      setTimeout(() => {
-        delete state.config.languageRemap[from];
-        renderRemapTable();
-        notifyConfigChanged();
-        showToast(`Regra "${from} → ${to}" removida.`);
-      }, 180);
+function setupRemapDropdown(type) {
+  const wrap = document.getElementById(`wrap-remap-${type}`);
+  const trigger = document.getElementById(`trigger-remap-${type}`);
+  const searchInput = document.getElementById(`search-remap-${type}`);
+  if (!wrap || !trigger) return;
+
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = wrap.classList.contains('open');
+
+    document.querySelectorAll('.remap-searchable-select.open, .custom-select-wrap.open').forEach(w => {
+      if (w !== wrap) {
+        w.classList.remove('open');
+        w.querySelector('[aria-expanded]')?.setAttribute('aria-expanded', 'false');
+      }
     });
 
-    tbody.appendChild(tr);
+    wrap.classList.toggle('open', !isOpen);
+    trigger.setAttribute('aria-expanded', !isOpen ? 'true' : 'false');
+
+    if (!isOpen) {
+      renderRemapDropdownOptions(type, searchInput?.value || '');
+      setTimeout(() => {
+        searchInput?.focus();
+      }, 50);
+    }
+  });
+
+  if (searchInput) {
+    searchInput.addEventListener('click', (e) => e.stopPropagation());
+    searchInput.addEventListener('input', () => {
+      renderRemapDropdownOptions(type, searchInput.value);
+    });
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const firstOption = wrap.querySelector('.remap-option-item');
+        if (firstOption) {
+          firstOption.click();
+        } else if (searchInput.value.trim()) {
+          const val = searchInput.value.trim().toLowerCase();
+          setRemapSelection(type, { code: val, name: val.toUpperCase(), flag: '🌐' });
+        }
+      } else if (e.key === 'Escape') {
+        wrap.classList.remove('open');
+        trigger.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+}
+
+function setupLanguageRemappingUI() {
+  setupRemapDropdown('from');
+  setupRemapDropdown('to');
+
+  const addBtn = document.getElementById('btn-add-remap');
+  if (addBtn) {
+    addBtn.addEventListener('click', () => {
+      const from = state.remapFromSelection?.code?.trim().toLowerCase();
+      const to = state.remapToSelection?.code?.trim().toLowerCase();
+
+      if (!from || !to) {
+        showToast('Please select both From and To languages for remapping.');
+        return;
+      }
+
+      if (from === to) {
+        showToast('Source and target languages cannot be the same.');
+        return;
+      }
+
+      if (!state.config.language_remapping) {
+        state.config.language_remapping = {};
+      }
+      if (!state.config.languageRemap) {
+        state.config.languageRemap = {};
+      }
+
+      state.config.language_remapping[from] = to;
+      state.config.languageRemap[from] = to;
+
+      renderRemapList();
+      notifyConfigChanged();
+      showToast(`Rule "${from} ➔ ${to}" added.`);
+
+      resetRemapDropdown('from');
+    });
+  }
+}
+
+function renderRemapList() {
+  const container = document.getElementById('remap-rules-list');
+  const countEl = document.getElementById('remap-rules-count');
+  if (!container) return;
+
+  const remap = state.config.language_remapping || state.config.languageRemap || {};
+  const entries = Object.entries(remap);
+
+  if (countEl) {
+    countEl.textContent = `${entries.length} ${entries.length === 1 ? 'rule' : 'rules'}`;
+  }
+
+  if (entries.length === 0) {
+    container.innerHTML = '<div class="remap-empty-state">No active mapping rules. Select From and To languages above to add a rule.</div>';
+    return;
+  }
+
+  container.innerHTML = '';
+  entries.forEach(([from, to]) => {
+    const fromInfo = getLanguageInfo(from);
+    const toInfo = getLanguageInfo(to);
+
+    const fromFlag = fromInfo?.flag || '🌐';
+    const fromName = fromInfo?.name || from.toUpperCase();
+    const toFlag = toInfo?.flag || '🌐';
+    const toName = toInfo?.name || to.toUpperCase();
+
+    const pill = document.createElement('div');
+    pill.className = 'remap-rule-pill';
+    pill.dataset.from = from;
+    pill.innerHTML = `
+      <div class="remap-rule-content">
+        <span class="remap-rule-lang from">
+          <span class="remap-rule-flag">${fromFlag}</span>
+          <span class="remap-rule-name">${escapeHtml(fromName)}</span>
+          <span class="remap-rule-code">(${escapeHtml(from)})</span>
+        </span>
+        <span class="remap-rule-arrow">➔</span>
+        <span class="remap-rule-lang to">
+          <span class="remap-rule-flag">${toFlag}</span>
+          <span class="remap-rule-name">${escapeHtml(toName)}</span>
+          <span class="remap-rule-code">(${escapeHtml(to)})</span>
+        </span>
+      </div>
+      <button type="button" class="btn-remove-rule" title="Remove rule" aria-label="Remove rule">✕</button>
+    `;
+
+    const removeBtn = pill.querySelector('.btn-remove-rule');
+    removeBtn.addEventListener('click', () => {
+      pill.classList.add('row-fade-out');
+      setTimeout(() => {
+        if (state.config.language_remapping) {
+          delete state.config.language_remapping[from];
+        }
+        if (state.config.languageRemap) {
+          delete state.config.languageRemap[from];
+        }
+        renderRemapList();
+        notifyConfigChanged();
+        showToast(`Rule "${from} ➔ ${to}" removed.`);
+      }, 160);
+    });
+
+    container.appendChild(pill);
   });
 }
 
@@ -2509,7 +2779,7 @@ function renderAll() {
   renderInstalledAddons();
   renderWhitelistTags();
   renderLanguageChips();
-  renderRemapTable();
+  renderRemapList();
   renderFiltersPriority();
   renderInstallPageDetails();
   updateStats();

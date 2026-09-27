@@ -26,6 +26,12 @@ export const DEFAULT_USER_CONFIG: UserConfig = {
     'pt': 'pob',
     'pt-pt': 'pob'
   },
+  language_remapping: {
+    'por': 'pob',
+    'pt-br': 'pob',
+    'pt': 'pob',
+    'pt-pt': 'pob'
+  },
   providerTimeoutMs: 6000,
   deduplication: true,
   deduplicationStrategy: 'both',
@@ -169,9 +175,24 @@ export function mergeWithDefaults(partial: PartialUserConfig): UserConfig {
     allowUnknownLanguages: typeof partial.allowUnknownLanguages === 'boolean'
       ? partial.allowUnknownLanguages
       : DEFAULT_USER_CONFIG.allowUnknownLanguages,
-    languageRemap: typeof partial.languageRemap === 'object' && partial.languageRemap !== null
-      ? { ...partial.languageRemap }
-      : { ...DEFAULT_USER_CONFIG.languageRemap },
+    ...(() => {
+      const rawRemap = (partial.language_remapping && typeof partial.language_remapping === 'object')
+        ? partial.language_remapping
+        : ((partial.languageRemap && typeof partial.languageRemap === 'object')
+          ? partial.languageRemap
+          : DEFAULT_USER_CONFIG.languageRemap);
+
+      const cleanRemap: Record<string, string> = {};
+      for (const [k, v] of Object.entries(rawRemap)) {
+        if (typeof k === 'string' && typeof v === 'string' && k.trim() && v.trim()) {
+          cleanRemap[k.trim().toLowerCase()] = v.trim().toLowerCase();
+        }
+      }
+      return {
+        languageRemap: cleanRemap,
+        language_remapping: cleanRemap
+      };
+    })(),
     providerTimeoutMs: typeof partial.providerTimeoutMs === 'number'
       ? Math.max(2000, Math.min(15000, partial.providerTimeoutMs))
       : DEFAULT_USER_CONFIG.providerTimeoutMs,

@@ -8,7 +8,7 @@ export interface LanguageValidationResult {
 
 /**
  * Resolves a language code through user remap rules.
- * Handles direct matches, canonical ISO 639-2 aliases, and chaining.
+ * Handles direct matches, canonical ISO 639-2 aliases, and arbitrary N:N custom mappings.
  */
 export function resolveLanguageRemap(
   lang: string,
@@ -18,45 +18,31 @@ export function resolveLanguageRemap(
     return lang;
   }
 
-  let current = lang.trim().toLowerCase();
-  const visited = new Set<string>();
+  const current = lang.trim().toLowerCase();
 
-  while (current && !visited.has(current)) {
-    visited.add(current);
+  // 1. Direct match on raw input string (e.g. 'eng', 'pt-br', 'por', 'pob', 'spa')
+  if (remapRules[current]) {
+    const target = remapRules[current].trim().toLowerCase();
+    return normalizeLanguageCode(target) || target;
+  }
 
-    // 1. Direct match on current string (e.g. 'por', 'pt-pt', 'pt-br')
-    if (remapRules[current]) {
-      const target = remapRules[current].trim().toLowerCase();
-      current = normalizeLanguageCode(target) || target;
-      continue;
-    }
+  // 2. Direct match on canonical ISO 639-2 code
+  const canonical = normalizeLanguageCode(current);
+  if (canonical && remapRules[canonical]) {
+    const target = remapRules[canonical].trim().toLowerCase();
+    return normalizeLanguageCode(target) || target;
+  }
 
-    // 2. Canonical ISO 639-2 match
-    const canonical = normalizeLanguageCode(current);
-    if (canonical && canonical !== current && remapRules[canonical]) {
-      const target = remapRules[canonical].trim().toLowerCase();
-      current = normalizeLanguageCode(target) || target;
-      continue;
-    }
-
-    // 3. Match against aliases of rules
-    let found = false;
-    for (const [fromKey, toVal] of Object.entries(remapRules)) {
-      const canonicalFrom = normalizeLanguageCode(fromKey);
-      if (canonicalFrom && (canonicalFrom === current || canonicalFrom === canonical)) {
-        const target = toVal.trim().toLowerCase();
-        current = normalizeLanguageCode(target) || target;
-        found = true;
-        break;
-      }
-    }
-
-    if (!found) {
-      break;
+  // 3. Match against aliases of keys in remapRules
+  for (const [fromKey, toVal] of Object.entries(remapRules)) {
+    const canonicalFrom = normalizeLanguageCode(fromKey);
+    if (canonicalFrom && (canonicalFrom === current || canonicalFrom === canonical)) {
+      const target = toVal.trim().toLowerCase();
+      return normalizeLanguageCode(target) || target;
     }
   }
 
-  return normalizeLanguageCode(current) || current;
+  return canonical || current;
 }
 
 export function validateAndNormalizeLanguage(
@@ -77,24 +63,31 @@ export function validateAndNormalizeLanguage(
 
   const cleanRaw = rawLang.trim().toLowerCase();
 
-  // Canonicalize to ISO 639-2 first
+  // 1. Check if raw string directly matches any remap rule first (e.g. user defined "pt-br" -> "eng")
+  if (remapRules && Object.keys(remapRules).length > 0) {
+    if (remapRules[cleanRaw]) {
+      const target = remapRules[cleanRaw].trim().toLowerCase();
+      const mapped = normalizeLanguageCode(target) || target;
+      if (isValidIso639_2(mapped)) {
+        return { valid: true, normalizedLang: mapped };
+      }
+    }
+  }
+
+  // 2. Canonicalize to ISO 639-2
   const normalized = normalizeLanguageCode(cleanRaw);
 
   if (normalized && isValidIso639_2(normalized)) {
     let finalLang = normalized;
     if (remapRules && Object.keys(remapRules).length > 0) {
-      if (remapRules[cleanRaw]) {
-        finalLang = resolveLanguageRemap(remapRules[cleanRaw], remapRules);
-      } else {
-        finalLang = resolveLanguageRemap(normalized, remapRules);
-      }
+      finalLang = resolveLanguageRemap(normalized, remapRules);
     }
     return { valid: true, normalizedLang: finalLang };
   }
 
-  // Also check if raw alias exists in remap rules directly (e.g. "pt-br" -> "pob")
-  if (remapRules && remapRules[cleanRaw]) {
-    const remapped = resolveLanguageRemap(remapRules[cleanRaw], remapRules);
+  // 3. Check if raw alias matches remap rule
+  if (remapRules && Object.keys(remapRules).length > 0) {
+    const remapped = resolveLanguageRemap(cleanRaw, remapRules);
     if (isValidIso639_2(remapped)) {
       return { valid: true, normalizedLang: remapped };
     }

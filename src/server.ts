@@ -8,7 +8,7 @@ import QRCode from 'qrcode';
 
 import { ENV } from './config/env';
 import { StremioManifest } from './types/stremio';
-import { decodeUserConfig, decodeUserConfigAsync } from './config/userConfig';
+import { decodeUserConfig, decodeUserConfigAsync, mergeWithDefaults } from './config/userConfig';
 import { handleSubtitleProxy, handleOpenSubtitlesRestDownload, handleShortIdDownload, handleUnifiedSubtitleProxy } from './proxy/subtitleProxy';
 import { getAllProviders } from './providers';
 import { globalSubtitleCache } from './utils/cache';
@@ -360,7 +360,8 @@ const handleConfigSave = async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const saveResult = await configStorage.saveConfigAsync(uuid, password, config);
+  const mergedConfig = mergeWithDefaults(config);
+  const saveResult = await configStorage.saveConfigAsync(uuid, password, mergedConfig);
   if (!saveResult.success) {
     const isDbError = saveResult.error?.includes('Database write failed');
     const statusCode = isDbError ? 500 : 401;

@@ -70,7 +70,8 @@ export class SubDLProvider extends BaseSubtitleProvider {
     const effectiveLangs = (context.config.languages && context.config.languages.length > 0)
       ? context.config.languages
       : ['pob', 'eng'];
-    const subdlLangs = mapWhitelistToSubDL(effectiveLangs, context.config.languageRemap);
+    const activeRemap = context.config.language_remapping || context.config.languageRemap;
+    const subdlLangs = mapWhitelistToSubDL(effectiveLangs, activeRemap);
     if (subdlLangs.length > 0) {
       params.languages = subdlLangs.join(',');
     }

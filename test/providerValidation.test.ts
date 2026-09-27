@@ -513,6 +513,63 @@ async function runAllTests(): Promise<void> {
   }
   console.log('  ✅ Provedores subdl e subsource roteiam através de /sub/proxy para descompactação transparente');
 
+  // --- Teste 10: Remapeamento Livre e Bidirecional N:N de Idiomas (language_remapping) ---
+  console.log('\n--- Teste 10: Remapeamento Livre e Bidirecional N:N de Idiomas (language_remapping) ---');
+  const arbitraryRules = {
+    'eng': 'pob',
+    'pt-br': 'eng',
+    'por': 'pob',
+    'spa': 'por'
+  };
+
+  // 10.1 Resolução direta e isolamento de regras (sem distorção de múltiplos saltos indesejados)
+  const resEng = validateAndNormalizeLanguage('eng', false, arbitraryRules);
+  const resPtBr = validateAndNormalizeLanguage('pt-br', false, arbitraryRules);
+  const resSpa = validateAndNormalizeLanguage('spa', false, arbitraryRules);
+  const resPor = validateAndNormalizeLanguage('por', false, arbitraryRules);
+  const resPtPt = validateAndNormalizeLanguage('pt-pt', false, arbitraryRules);
+  const resFra = validateAndNormalizeLanguage('fra', false, arbitraryRules);
+
+  if (resEng.normalizedLang !== 'pob') {
+    console.error(`❌ Falha no Teste 10.1: "eng" deveria mapear para "pob", mas retornou "${resEng.normalizedLang}"`);
+    process.exit(1);
+  }
+  if (resPtBr.normalizedLang !== 'eng') {
+    console.error(`❌ Falha no Teste 10.1: "pt-br" deveria mapear para "eng", mas retornou "${resPtBr.normalizedLang}"`);
+    process.exit(1);
+  }
+  if (resSpa.normalizedLang !== 'por') {
+    console.error(`❌ Falha no Teste 10.1: "spa" deveria mapear para "por", mas retornou "${resSpa.normalizedLang}"`);
+    process.exit(1);
+  }
+  if (resPor.normalizedLang !== 'pob') {
+    console.error(`❌ Falha no Teste 10.1: "por" deveria mapear para "pob", mas retornou "${resPor.normalizedLang}"`);
+    process.exit(1);
+  }
+  if (resPtPt.normalizedLang !== 'pob') {
+    console.error(`❌ Falha no Teste 10.1: "pt-pt" deveria mapear para "pob", mas retornou "${resPtPt.normalizedLang}"`);
+    process.exit(1);
+  }
+  if (resFra.normalizedLang !== 'fra') {
+    console.error(`❌ Falha no Teste 10.1: "fra" não mapeado deveria permanecer "fra", mas retornou "${resFra.normalizedLang}"`);
+    process.exit(1);
+  }
+  console.log('  ✅ Mapeamentos arbitrários resolvidos com precisão (eng -> pob, pt-br -> eng, spa -> por, por -> pob)');
+  console.log('  ✅ Regra específica "pt-br -> eng" preservada sem ser sobrescrita por "eng -> pob"');
+
+  // 10.2 Sincronização e persistência no payload de configuração
+  const configWithNewRemapping = mergeWithDefaults({
+    language_remapping: {
+      'eng': 'pob',
+      'pt-br': 'eng'
+    }
+  });
+  if (!configWithNewRemapping.language_remapping || configWithNewRemapping.language_remapping['eng'] !== 'pob' || configWithNewRemapping.languageRemap['eng'] !== 'pob') {
+    console.error('❌ Falha no Teste 10.2: language_remapping não sincronizado com languageRemap em mergeWithDefaults!');
+    process.exit(1);
+  }
+  console.log('  ✅ Sincronização bidirecional de "language_remapping" e "languageRemap" em mergeWithDefaults validada com sucesso');
+
   console.log('\n🎉 TODOS OS TESTES PASSARAM COM 100% DE SUCESSO!');
   process.exit(0);
 }

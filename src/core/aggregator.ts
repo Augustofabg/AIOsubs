@@ -79,10 +79,11 @@ export async function getAggregatedSubtitles(
 
   for (const sub of rawSubtitles) {
     const item: RawSubtitleItem = { ...sub };
+    const activeRemap = config.language_remapping || config.languageRemap;
     const validation = validateAndNormalizeLanguage(
       item.lang,
       config.allowUnknownLanguages,
-      config.languageRemap
+      activeRemap
     );
 
     if (!validation.valid || !validation.normalizedLang) {
