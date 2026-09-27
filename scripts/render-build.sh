@@ -31,6 +31,8 @@ if ! command -v ffmpeg &> /dev/null && [ ! -f "bin/ffmpeg" ]; then
     rm -rf /tmp/ffmpeg*
     echo "Static ffmpeg installed to bin/ffmpeg"
   fi
+fi
+
 # 3. Setup ffsubsync in virtual environment if python3 is available
 if command -v python3 &> /dev/null && [ ! -f "bin/ffsubsync" ] && [ ! -f "/opt/venv/bin/ffsubsync" ]; then
   echo "Setting up Python virtual environment for ffsubsync..."
@@ -44,5 +46,6 @@ if command -v python3 &> /dev/null && [ ! -f "bin/ffsubsync" ] && [ ! -f "/opt/v
   fi
 fi
 
-echo "==> Render build finished successfully!"
+chmod +x bin/* 2>/dev/null || true
 
+echo "==> Render build finished successfully!"
