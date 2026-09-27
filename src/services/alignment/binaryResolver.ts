@@ -2,11 +2,19 @@ import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
 
-// Automatically augment process.env.PATH with container virtual environment if present
-if (fs.existsSync('/opt/venv/bin')) {
-  const currentPath = process.env.PATH || '';
-  if (!currentPath.split(path.delimiter).includes('/opt/venv/bin')) {
-    process.env.PATH = `/opt/venv/bin${path.delimiter}${currentPath}`;
+// Automatically augment process.env.PATH with container virtual environment and local bin if present
+const pathsToAugment = [
+  path.join(process.cwd(), 'bin'),
+  process.env.HOME ? path.join(process.env.HOME, '.local', 'bin') : '',
+  '/opt/venv/bin',
+  path.join(process.cwd(), '.venv', process.platform === 'win32' ? 'Scripts' : 'bin')
+].filter(Boolean) as string[];
+
+const currentPath = process.env.PATH || '';
+const existingPaths = currentPath.split(path.delimiter);
+for (const p of pathsToAugment) {
+  if (fs.existsSync(p) && !existingPaths.includes(p)) {
+    process.env.PATH = `${p}${path.delimiter}${process.env.PATH || ''}`;
   }
 }
 
@@ -14,7 +22,7 @@ let resolvedFfmpegPath: string | null = null;
 let resolvedFfsubsyncPath: string | null = null;
 let resolvedAlassPath: string | null = null;
 
-export function testBinaryExecution(bin: string, args: string[], timeoutMs: number = 500): Promise<boolean> {
+export function testBinaryExecution(bin: string, args: string[], timeoutMs: number = 1500): Promise<boolean> {
   return new Promise((resolve) => {
     let proc: ReturnType<typeof spawn>;
     let settled = false;
@@ -32,7 +40,8 @@ export function testBinaryExecution(bin: string, args: string[], timeoutMs: numb
     try {
       proc = spawn(bin, args, {
         windowsHide: true,
-        stdio: ['ignore', 'ignore', 'ignore']
+        stdio: ['ignore', 'ignore', 'ignore'],
+        env: process.env
       });
 
       proc.on('error', () => {
@@ -72,17 +81,22 @@ export function getFfmpegCandidates(): string[] {
   // 2. Local project bin directory
   list.push(path.join(process.cwd(), 'bin', isWin ? 'ffmpeg.exe' : 'ffmpeg'));
 
-  // 3. Virtual environment (Docker / Render / Local)
+  // 3. User local bin directory ($HOME/.local/bin)
+  if (process.env.HOME) {
+    list.push(path.join(process.env.HOME, '.local', 'bin', 'ffmpeg'));
+  }
+
+  // 4. Virtual environment (Docker / Render / Local)
   list.push('/opt/venv/bin/ffmpeg');
   list.push(path.join(process.cwd(), '.venv', isWin ? 'Scripts' : 'bin', isWin ? 'ffmpeg.exe' : 'ffmpeg'));
   list.push(path.join(process.cwd(), 'venv', isWin ? 'Scripts' : 'bin', isWin ? 'ffmpeg.exe' : 'ffmpeg'));
 
-  // 4. Standard Linux / Unix paths
+  // 5. Standard Linux / Unix paths
   list.push('/usr/local/bin/ffmpeg');
   list.push('/usr/bin/ffmpeg');
   list.push('/bin/ffmpeg');
 
-  // 5. System PATH fallback
+  // 6. System PATH fallback
   list.push('ffmpeg');
 
   return list;
@@ -100,16 +114,21 @@ export function getFfsubsyncCandidates(): string[] {
   // 2. Local project bin directory
   list.push(path.join(process.cwd(), 'bin', isWin ? 'ffsubsync.exe' : 'ffsubsync'));
 
-  // 3. Virtual environment (Docker / Render / Local)
+  // 3. User local bin directory ($HOME/.local/bin)
+  if (process.env.HOME) {
+    list.push(path.join(process.env.HOME, '.local', 'bin', 'ffsubsync'));
+  }
+
+  // 4. Virtual environment (Docker / Render / Local)
   list.push('/opt/venv/bin/ffsubsync');
   list.push(path.join(process.cwd(), '.venv', isWin ? 'Scripts' : 'bin', isWin ? 'ffsubsync.exe' : 'ffsubsync'));
   list.push(path.join(process.cwd(), 'venv', isWin ? 'Scripts' : 'bin', isWin ? 'ffsubsync.exe' : 'ffsubsync'));
 
-  // 4. Standard Linux / Unix paths
+  // 5. Standard Linux / Unix paths
   list.push('/usr/local/bin/ffsubsync');
   list.push('/usr/bin/ffsubsync');
 
-  // 5. System PATH fallback
+  // 6. System PATH fallback
   list.push('ffsubsync');
 
   return list;
@@ -134,16 +153,21 @@ export function getAlassCandidates(): string[] {
     list.push(path.join(process.cwd(), 'bin', 'alass-cli'));
   }
 
-  // 3. Virtual environment (Docker / Render)
+  // 3. User local bin directory ($HOME/.local/bin)
+  if (process.env.HOME) {
+    list.push(path.join(process.env.HOME, '.local', 'bin', 'alass'));
+  }
+
+  // 4. Virtual environment (Docker / Render)
   list.push('/opt/venv/bin/alass');
 
-  // 4. Standard Linux / Unix paths
+  // 5. Standard Linux / Unix paths
   list.push('/usr/local/bin/alass');
   list.push('/usr/bin/alass');
   list.push('/usr/local/bin/alass-cli');
   list.push('/usr/bin/alass-cli');
 
-  // 5. System PATH fallback
+  // 6. System PATH fallback
   list.push('alass');
   list.push('alass-cli');
 
