@@ -266,13 +266,20 @@ export async function handleUnifiedSubtitleProxy(req: Request, res: Response): P
     : 'srt';
 
   try {
+    const requestHeaders: Record<string, string> = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AIOSubs v1.0.0',
+      'Accept': '*/*'
+    };
+    const apiKey = (req.query.apiKey as string) || (req.query.key as string);
+    if (apiKey) {
+      requestHeaders['X-API-Key'] = apiKey;
+      requestHeaders['Api-Key'] = apiKey;
+    }
+
     const upstreamRes = await axios.get<ArrayBuffer>(targetUrl, {
       responseType: 'arraybuffer',
       timeout: 15000,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AIOSubs v1.0.0',
-        'Accept': '*/*'
-      }
+      headers: requestHeaders
     });
 
     const rawBuffer = Buffer.from(upstreamRes.data);
@@ -306,30 +313,32 @@ export async function handleUnifiedSubtitleProxy(req: Request, res: Response): P
 /**
  * Handles OpenSubtitles REST download endpoint:
  * Calls POST /api/v1/download to get the temporary download link,
- * fetches the file, decompresses GZIP/ZIP, decodes UTF-8, and serves valid text with CORS.
+ * with automatic fallback to OpenSubtitles direct download mirrors if API key lacks token or is rate-limited.
  */
 export async function handleOpenSubtitlesRestDownload(req: Request, res: Response): Promise<void> {
   const { fileId } = req.params;
   const apiKey = req.query.apiKey as string;
+  const legacyId = (req.query.legacyId as string) || '';
   const filename = (req.query.filename as string) || `subtitle-${fileId}.srt`;
   const preferredFormat: 'srt' | 'vtt' = filename.toLowerCase().endsWith('.vtt') ? 'vtt' : 'srt';
 
-  if (!fileId || !apiKey) {
+  if (!fileId) {
     res.status(400);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.send('Identificador de arquivo (fileId) ou chave API ausente.');
+    res.send('Identificador de arquivo (fileId) ausente.');
     return;
   }
 
-  try {
-    let downloadRes;
-    const userAgents = ['AIOSubtitles v1.0.0', 'AIOSubs v1.0.0'];
+  let rawBuffer: Buffer | null = null;
+  let lastError: unknown;
 
-    let lastError: unknown;
+  // 1. Try official POST /api/v1/download if apiKey is present
+  if (apiKey) {
+    const userAgents = ['AIOSubtitles v1.0.0', 'AIOSubs v1.0.0'];
     for (const ua of userAgents) {
       try {
-        downloadRes = await axios.post<{ link: string }>(
+        const downloadRes = await axios.post<{ link: string }>(
           'https://api.opensubtitles.com/api/v1/download',
           { file_id: parseInt(fileId, 10) },
           {
@@ -339,29 +348,75 @@ export async function handleOpenSubtitlesRestDownload(req: Request, res: Respons
               'Content-Type': 'application/json',
               'Accept': 'application/json'
             },
-            timeout: 10000
+            timeout: 7000
           }
         );
-        if (downloadRes.data?.link) break;
+        if (downloadRes.data?.link) {
+          const subRes = await axios.get<ArrayBuffer>(downloadRes.data.link, {
+            responseType: 'arraybuffer',
+            timeout: 10000,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AIOSubs v1.0.0',
+              'Accept': '*/*'
+            }
+          });
+          if (subRes.data && subRes.data.byteLength > 0) {
+            rawBuffer = Buffer.from(subRes.data);
+            break;
+          }
+        }
       } catch (err) {
         lastError = err;
       }
     }
+  }
 
-    if (!downloadRes?.data?.link) {
-      throw lastError || new Error('OpenSubtitles REST returned no download link');
+  // 2. High-reliability fallback: dl.opensubtitles.org / subs5.strem.io mirrors
+  if (!rawBuffer) {
+    const candidateUrls: string[] = [];
+    if (legacyId && /^\d+$/.test(legacyId)) {
+      candidateUrls.push(`https://dl.opensubtitles.org/en/download/sub/${legacyId}`);
+    }
+    if (/^\d+$/.test(fileId)) {
+      candidateUrls.push(`https://dl.opensubtitles.org/en/download/sub/${fileId}`);
+      candidateUrls.push(`https://subs5.strem.io/en/download/subencoding-stremio-utf8/src-api/file/${fileId}`);
     }
 
-    const subRes = await axios.get<ArrayBuffer>(downloadRes.data.link, {
-      responseType: 'arraybuffer',
-      timeout: 10000,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AIOSubs v1.0.0',
-        'Accept': '*/*'
+    for (const mirrorUrl of candidateUrls) {
+      try {
+        const mirrorRes = await axios.get<ArrayBuffer>(mirrorUrl, {
+          responseType: 'arraybuffer',
+          timeout: 10000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AIOSubs v1.0.0',
+            'Accept': '*/*'
+          }
+        });
+        if (mirrorRes.data && mirrorRes.data.byteLength > 50) {
+          const tempBuf = Buffer.from(mirrorRes.data);
+          const preview = tempBuf.slice(0, 100).toString('utf8').toLowerCase();
+          if (!preview.includes('<!doctype') && !preview.includes('<html')) {
+            rawBuffer = tempBuf;
+            break;
+          }
+        }
+      } catch (err) {
+        lastError = err;
       }
-    });
+    }
+  }
 
-    const rawBuffer = Buffer.from(subRes.data);
+  if (!rawBuffer) {
+    const errorMsg = lastError instanceof Error ? lastError.message : String(lastError || 'Falha ao baixar legenda do OpenSubtitles');
+    Logger.error(`OpenSubtitles download failed for file ${fileId} (legacyId: ${legacyId}): ${errorMsg}`, lastError);
+    res.status(502);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.send(`Erro ao baixar legenda do OpenSubtitles: ${errorMsg}`);
+    return;
+  }
+
+  try {
     const { buffer: cleanBuffer, formatHint, filename: extractedFilename } = decompressBuffer(rawBuffer);
     const effectiveFormat = formatHint || preferredFormat;
     const finalFilename = extractedFilename || filename;
@@ -370,7 +425,7 @@ export async function handleOpenSubtitlesRestDownload(req: Request, res: Respons
     const validation = validateAndFormatSubtitle(utf8Text, effectiveFormat);
 
     if (!validation.valid) {
-      Logger.warn(`Invalid subtitle delivered from OpenSubtitles REST for file ${fileId}: ${validation.reason}`);
+      Logger.warn(`Invalid subtitle delivered from OpenSubtitles for file ${fileId}: ${validation.reason}`);
       res.status(502);
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -381,11 +436,11 @@ export async function handleOpenSubtitlesRestDownload(req: Request, res: Respons
     sendSubtitleResponse(res, validation.content, validation.format, finalFilename);
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    Logger.error(`OpenSubtitles REST download failed for file ${fileId}: ${errorMsg}`, err);
+    Logger.error(`OpenSubtitles buffer parsing failed for file ${fileId}: ${errorMsg}`, err);
     res.status(502);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.send(`Erro ao baixar legenda do OpenSubtitles: ${errorMsg}`);
+    res.send(`Erro ao processar arquivo de legenda do OpenSubtitles: ${errorMsg}`);
   }
 }
 

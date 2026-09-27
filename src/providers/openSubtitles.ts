@@ -16,6 +16,7 @@ interface OpenSubtitlesRestItem {
     release: string;
     comments?: string;
     url?: string;
+    legacy_subtitle_id?: number;
     files: Array<{
       file_id: number;
       cd_number: number;
@@ -103,9 +104,10 @@ export class OpenSubtitlesProvider extends BaseSubtitleProvider {
 
       const file = attr.files[0];
       const fileId = file.file_id;
+      const legacyId = attr.legacy_subtitle_id || '';
       const fileName = file.file_name || attr.release || `${query.id}.srt`;
 
-      const downloadProxyUrl = `/proxy/download/os-rest/${fileId}?filename=${encodeURIComponent(fileName)}&apiKey=${encodeURIComponent(apiKey)}`;
+      const downloadProxyUrl = `/proxy/download/os-rest/${fileId}?filename=${encodeURIComponent(fileName)}&apiKey=${encodeURIComponent(apiKey)}${legacyId ? `&legacyId=${encodeURIComponent(String(legacyId))}` : ''}`;
 
       items.push({
         id: `os-${item.id || fileId}`,

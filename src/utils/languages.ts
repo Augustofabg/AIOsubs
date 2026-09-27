@@ -18,6 +18,7 @@ export const SUPPORTED_LANGUAGES: LanguageInfo[] = [
     flag: '🇧🇷',
     aliases: [
       'pt-br', 'pt_br', 'ptbr', 'brazilian', 'brazilian portuguese', 'pob', 'pb',
+      'brazillian', 'brazillian portuguese', 'brazillian-portuguese', 'brazilian-portuguese',
       'portuguese (brazil)', 'portuguese (br)', 'portuguese brazil', 'portuguese brasil',
       'portugues (brasil)', 'portugues (br)', 'português (brasil)', 'português (br)',
       'portuguese-brazil', 'portuguese-br', 'portugues brasil', 'português brasil'
@@ -417,6 +418,11 @@ export function normalizeLanguageCode(raw: string | undefined | null): string | 
   // 1. Direct match in lookup map
   const found = LOOKUP_MAP.get(clean);
   if (found) return found.code;
+
+  // Fast resolution for Brazilian Portuguese variants (e.g. SubDL's "brazillian-portuguese", "brazilian", "brasil")
+  if (/brazi?l/i.test(clean)) {
+    return 'pob';
+  }
 
   // 2. Strip brackets, parentheses, slashes (e.g. "Portuguese (BR)" -> "portuguese br")
   const stripped = clean.replace(/[()[\]/]/g, ' ').replace(/\s+/g, ' ').trim();
