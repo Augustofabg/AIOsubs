@@ -1492,6 +1492,9 @@ function triggerTabRender(tabId) {
     renderRemapList();
   } else if (tabId === 'priority') {
     renderFiltersPriority();
+  } else if (tabId === 'alignment') {
+    renderAlignmentState();
+    checkAlignmentToolsStatus();
   }
 }
 
@@ -1719,7 +1722,7 @@ function renderRemapDropdownOptions(type, query = '') {
     customItem.className = 'remap-option-item remap-option-custom';
     customItem.innerHTML = `
       <div class="remap-option-left">
-        <span class="remap-option-flag">✨</span>
+        <span class="remap-option-flag remap-custom-plus-icon">+</span>
         <span class="remap-option-name">Use custom code: <strong>"${escapeHtml(q)}"</strong></span>
       </div>
       <span class="remap-option-code">${escapeHtml(q)}</span>

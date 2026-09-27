@@ -518,6 +518,22 @@
                 </svg>
                 <span>Priority</span>
               </button>
+
+              <button class="filters-nav-item" data-filter-tab="alignment" type="button">
+                <svg class="filters-nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="21" y1="4" x2="14" y2="4"></line>
+                  <line x1="10" y1="4" x2="3" y2="4"></line>
+                  <line x1="21" y1="12" x2="12" y2="12"></line>
+                  <line x1="8" y1="12" x2="3" y2="12"></line>
+                  <line x1="21" y1="20" x2="16" y2="20"></line>
+                  <line x1="12" y1="20" x2="3" y2="20"></line>
+                  <line x1="14" y1="2" x2="14" y2="6"></line>
+                  <line x1="8" y1="10" x2="8" y2="14"></line>
+                  <line x1="16" y1="18" x2="16" y2="22"></line>
+                </svg>
+                <span>Alignment</span>
+                <span class="badge-experimental nav-badge-experimental">EXPERIMENTAL</span>
+              </button>
             </nav>
 
             <!-- Active Tab Content Area -->
@@ -737,6 +753,67 @@
                 </div>
               </div>
 
+              <!-- TAB 4: ALIGNMENT (EXPERIMENTAL) -->
+              <div class="filters-tab-pane" id="pane-filter-alignment">
+                <div class="panel-header-row">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <h2 class="panel-title" style="margin-bottom: 0;">AUTO SUBTITLE ALIGNMENT</h2>
+                    <span class="badge-experimental">EXPERIMENTAL</span>
+                  </div>
+                  <p class="panel-subtitle">Automatically sync and align subtitles with video audio using alass or ffsubsync.</p>
+                </div>
+
+                <div class="card card-filter-pane card-alignment-settings" style="padding: 20px 24px;">
+                  <div class="alignment-toggle-row" style="display: flex; align-items: center; justify-content: space-between;">
+                    <div class="alignment-toggle-info">
+                      <div style="font-weight: 600; font-size: 14px; color: #fff;">Enable Auto Subtitle Alignment (Experimental)</div>
+                      <div style="font-size: 12px; color: var(--text-secondary); margin-top: 3px;">Automatically sync subtitles with video audio using alass/ffsubsync. May increase initial loading time.</div>
+                    </div>
+                    <label class="compact-switch" title="Toggle Auto Alignment">
+                      <input type="checkbox" id="toggle-auto-alignment">
+                      <span class="compact-slider"></span>
+                    </label>
+                  </div>
+
+                  <!-- Options revealed when toggle is enabled -->
+                  <div id="alignment-options-panel" style="display: none; margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
+                      <!-- Audio Sample Duration -->
+                      <div class="alignment-field-group">
+                        <label for="align-sample-duration" style="display: block; font-size: 13px; font-weight: 500; color: #ddd; margin-bottom: 6px;">Audio Sample Duration</label>
+                        <select id="align-sample-duration" class="form-input" style="background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; color: #fff; padding: 8px 12px; width: 100%; font-size: 13px;">
+                          <option value="2">2 minutes (Fastest, recommended)</option>
+                          <option value="5">5 minutes (Higher accuracy)</option>
+                        </select>
+                        <span style="display: block; font-size: 11px; color: var(--text-muted); margin-top: 4px;">Minutes of audio sampled from stream</span>
+                      </div>
+
+                      <!-- Safety Timeout -->
+                      <div class="alignment-field-group">
+                        <label for="align-timeout-seconds" style="display: block; font-size: 13px; font-weight: 500; color: #ddd; margin-bottom: 6px;">Safety Timeout Limit</label>
+                        <select id="align-timeout-seconds" class="form-input" style="background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; color: #fff; padding: 8px 12px; width: 100%; font-size: 13px;">
+                          <option value="4">4 seconds (Strict player safety)</option>
+                          <option value="5" selected>5 seconds (Balanced)</option>
+                          <option value="6">6 seconds (Deeper sync)</option>
+                        </select>
+                        <span style="display: block; font-size: 11px; color: var(--text-muted); margin-top: 4px;">Returns original subtitle if processing exceeds limit</span>
+                      </div>
+
+                      <!-- Engine / Tool -->
+                      <div class="alignment-field-group">
+                        <label for="align-tool-preference" style="display: block; font-size: 13px; font-weight: 500; color: #ddd; margin-bottom: 6px;">Alignment Tool</label>
+                        <select id="align-tool-preference" class="form-input" style="background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; color: #fff; padding: 8px 12px; width: 100%; font-size: 13px;">
+                          <option value="auto">Auto (alass -> ffsubsync)</option>
+                          <option value="alass">alass (Fast Rust engine)</option>
+                          <option value="ffsubsync">ffsubsync (Python VAD engine)</option>
+                        </select>
+                        <span id="align-tool-status-badge" style="display: block; font-size: 11px; color: #38bdf8; margin-top: 4px;">Checking system binaries...</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
         </section>
@@ -889,66 +966,7 @@
             </div>
           </div>
 
-          <!-- SECTION 4: AUTO SUBTITLE ALIGNMENT (EXPERIMENTAL) -->
-          <div class="formatter-section-group" id="alignment-section-group" style="margin-top: 24px;">
-            <div class="section-badge-header" style="display: flex; align-items: center; gap: 8px;">
-              <span>AUTO SUBTITLE ALIGNMENT</span>
-              <span class="badge-experimental" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 999px; text-transform: uppercase;">Experimental</span>
-            </div>
-            <p class="section-desc-subtle">Automatically sync and align subtitles with video audio using alass or ffsubsync.</p>
-
-            <div class="card card-alignment-settings" style="padding: 20px 24px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px;">
-              <div class="alignment-toggle-row" style="display: flex; align-items: center; justify-content: space-between;">
-                <div class="alignment-toggle-info">
-                  <div style="font-weight: 600; font-size: 14px; color: #fff;">Enable Auto Subtitle Alignment (Experimental)</div>
-                  <div style="font-size: 12px; color: #888; margin-top: 3px;">Automatically sync subtitles with video audio using alass/ffsubsync. May increase initial loading time.</div>
-                </div>
-                <label class="compact-switch" title="Toggle Auto Alignment">
-                  <input type="checkbox" id="toggle-auto-alignment">
-                  <span class="compact-slider"></span>
-                </label>
-              </div>
-
-              <!-- Options revealed when toggle is enabled -->
-              <div id="alignment-options-panel" style="display: none; margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.08);">
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
-                  <!-- Audio Sample Duration -->
-                  <div class="alignment-field-group">
-                    <label for="align-sample-duration" style="display: block; font-size: 13px; font-weight: 500; color: #ddd; margin-bottom: 6px;">Audio Sample Duration</label>
-                    <select id="align-sample-duration" class="form-input" style="background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; color: #fff; padding: 8px 12px; width: 100%; font-size: 13px;">
-                      <option value="2">2 minutes (Fastest, recommended)</option>
-                      <option value="5">5 minutes (Higher accuracy)</option>
-                    </select>
-                    <span style="display: block; font-size: 11px; color: #888; margin-top: 4px;">Minutes of audio sampled from stream</span>
-                  </div>
-
-                  <!-- Safety Timeout -->
-                  <div class="alignment-field-group">
-                    <label for="align-timeout-seconds" style="display: block; font-size: 13px; font-weight: 500; color: #ddd; margin-bottom: 6px;">Safety Timeout Limit</label>
-                    <select id="align-timeout-seconds" class="form-input" style="background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; color: #fff; padding: 8px 12px; width: 100%; font-size: 13px;">
-                      <option value="4">4 seconds (Strict player safety)</option>
-                      <option value="5" selected>5 seconds (Balanced)</option>
-                      <option value="6">6 seconds (Deeper sync)</option>
-                    </select>
-                    <span style="display: block; font-size: 11px; color: #888; margin-top: 4px;">Returns original subtitle if processing exceeds limit</span>
-                  </div>
-
-                  <!-- Engine / Tool -->
-                  <div class="alignment-field-group">
-                    <label for="align-tool-preference" style="display: block; font-size: 13px; font-weight: 500; color: #ddd; margin-bottom: 6px;">Alignment Tool</label>
-                    <select id="align-tool-preference" class="form-input" style="background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; color: #fff; padding: 8px 12px; width: 100%; font-size: 13px;">
-                      <option value="auto">Auto (alass -> ffsubsync)</option>
-                      <option value="alass">alass (Fast Rust engine)</option>
-                      <option value="ffsubsync">ffsubsync (Python VAD engine)</option>
-                    </select>
-                    <span id="align-tool-status-badge" style="display: block; font-size: 11px; color: #38bdf8; margin-top: 4px;">Checking system binaries...</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- SECTION 5: SAVE ACTION -->
+          <!-- SECTION 4: SAVE ACTION -->
           <div class="formatter-section-group" style="margin-top: 24px;">
             <div class="card card-formatter-actions" style="display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px;">
               <div class="formatter-save-info">
