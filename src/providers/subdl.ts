@@ -109,7 +109,10 @@ export class SubDLProvider extends BaseSubtitleProvider {
         /\[cc\]|\.cc\.|\[hi\]|\(hi\)|hearing/i.test(releaseName)
       );
 
-      const proxyUrl = `/sub/proxy?url=${encodeURIComponent(downloadUrl)}&filename=${encodeURIComponent(releaseName + '.srt')}&provider=subdl`;
+      let proxyUrl = `/sub/proxy?url=${encodeURIComponent(downloadUrl)}&filename=${encodeURIComponent(releaseName + '.srt')}&provider=subdl&lang=${encodeURIComponent(sub.lang || '')}`;
+      if (query.type) proxyUrl += `&type=${encodeURIComponent(query.type)}`;
+      if (query.season != null) proxyUrl += `&season=${encodeURIComponent(String(query.season))}`;
+      if (query.episode != null) proxyUrl += `&episode=${encodeURIComponent(String(query.episode))}`;
 
       items.push({
         id: `subdl-${Math.random().toString(36).substring(2, 10)}`,

@@ -6,6 +6,8 @@ import zlib from 'zlib';
 import path from 'path';
 import { LRUCache } from 'lru-cache';
 import { Logger } from '../utils/logger';
+import { extractSubtitleFromArchive, ArchiveExtractionOptions } from '../services/archive';
+import { convertAssToVtt, clientSupportsNativeAss, isAssOrSsa } from '../services/converter';
 
 export interface ProxyDownloadEntry {
   originalUrl: string;
@@ -14,6 +16,10 @@ export interface ProxyDownloadEntry {
   format: string;
   apiKey?: string;
   fileId?: string | number;
+  type?: string;
+  season?: number | string;
+  episode?: number | string;
+  lang?: string;
 }
 
 const proxyDownloadStore = new LRUCache<string, ProxyDownloadEntry>({
@@ -32,60 +38,18 @@ export function registerProxyDownload(entry: ProxyDownloadEntry): string {
 
 /**
  * Recursively inspects and decompresses GZIP or ZIP archives.
- * Extracts the primary .srt or .vtt subtitle file.
+ * Delegates to universal extractSubtitleFromArchive for smart episode matching.
  */
-export function decompressBuffer(input: Buffer): { buffer: Buffer; formatHint?: 'srt' | 'vtt'; filename?: string } {
-  let buf = input;
-  let formatHint: 'srt' | 'vtt' | undefined;
-  let filename: string | undefined;
-
-  for (let pass = 0; pass < 3; pass++) {
-    if (!buf || buf.length < 4) break;
-
-    // 1. Detect GZIP (0x1F, 0x8B)
-    if (buf[0] === 0x1f && buf[1] === 0x8b) {
-      try {
-        buf = zlib.gunzipSync(buf);
-        continue;
-      } catch (err) {
-        Logger.warn('Failed to gunzip buffer, continuing with raw buffer', { error: String(err) });
-        break;
-      }
-    }
-
-    // 2. Detect ZIP (0x50, 0x4B)
-    if (buf[0] === 0x50 && buf[1] === 0x4b) {
-      try {
-        const zip = new AdmZip(buf);
-        const entries = zip.getEntries();
-        const validEntries = entries.filter(e => 
-          !e.isDirectory && 
-          !e.entryName.includes('__MACOSX') && 
-          !path.basename(e.entryName).startsWith('.')
-        );
-
-        const subEntry = validEntries.find(e => e.entryName.toLowerCase().endsWith('.srt'))
-          || validEntries.find(e => e.entryName.toLowerCase().endsWith('.vtt'))
-          || validEntries[0];
-
-        if (subEntry) {
-          const entryName = subEntry.entryName.toLowerCase();
-          if (entryName.endsWith('.vtt')) formatHint = 'vtt';
-          else if (entryName.endsWith('.srt')) formatHint = 'srt';
-          filename = path.basename(subEntry.entryName);
-          buf = subEntry.getData();
-          continue;
-        }
-      } catch (err) {
-        Logger.warn('Failed to unzip buffer with AdmZip, continuing with raw buffer', { error: String(err) });
-        break;
-      }
-    }
-
-    break;
-  }
-
-  return { buffer: buf, formatHint, filename };
+export function decompressBuffer(
+  input: Buffer,
+  options?: ArchiveExtractionOptions
+): { buffer: Buffer; formatHint?: 'srt' | 'vtt' | 'ass' | 'ssa'; filename?: string } {
+  const result = extractSubtitleFromArchive(input, options);
+  return {
+    buffer: result.buffer,
+    formatHint: result.format,
+    filename: result.filename
+  };
 }
 
 /**
@@ -213,10 +177,16 @@ export function validateAndFormatSubtitle(
 export function sendSubtitleResponse(
   res: Response,
   text: string,
-  format: 'srt' | 'vtt',
+  format: 'srt' | 'vtt' | 'ass' | 'ssa',
   filename: string
 ): void {
-  const contentType = format === 'vtt' ? 'text/vtt; charset=utf-8' : 'text/plain; charset=utf-8';
+  let contentType = 'text/plain; charset=utf-8';
+  if (format === 'vtt') {
+    contentType = 'text/vtt; charset=utf-8';
+  } else if (format === 'ass' || format === 'ssa') {
+    contentType = 'text/x-ssa; charset=utf-8';
+  }
+
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
@@ -228,7 +198,8 @@ export function sendSubtitleResponse(
 
 /**
  * Unified proxy endpoint: downloads remote subtitles (including .zip and .gz archives from SubDL / Subsource),
- * decompresses, decodes charset to UTF-8, and serves valid text with CORS.
+ * decompresses season packs in-memory, selects exact episode, converts .ass/.ssa to .vtt conditionally,
+ * decodes charset to strict UTF-8, and serves valid text with CORS.
  */
 export async function handleUnifiedSubtitleProxy(req: Request, res: Response): Promise<void> {
   let targetUrl = (req.query.url as string) || '';
@@ -261,6 +232,29 @@ export async function handleUnifiedSubtitleProxy(req: Request, res: Response): P
   if (!rawFilename || rawFilename === '/' || rawFilename === '.') {
     rawFilename = 'subtitle.srt';
   }
+
+  const queryType = (req.query.type as string) || '';
+  let querySeason = req.query.season !== undefined && req.query.season !== '' ? Number(req.query.season) : undefined;
+  let queryEpisode = req.query.episode !== undefined && req.query.episode !== '' ? Number(req.query.episode) : undefined;
+  const queryLang = (req.query.lang as string) || (req.query.targetLang as string);
+  const clientParam = (req.query.client as string) || (req.query.format as string);
+
+  // If season or episode not in query, infer from rawFilename or targetUrl
+  if (queryEpisode === undefined) {
+    const sAndEMatch = /(?:^|[^a-z0-9])s0*(\d+)\s*e0*(\d+)(?:[^a-z0-9]|$)/i.exec(rawFilename)
+      || /(?:^|[^a-z0-9])0*(\d+)\s*x\s*0*(\d+)(?:[^a-z0-9]|$)/i.exec(rawFilename);
+    if (sAndEMatch) {
+      if (querySeason === undefined) querySeason = Number(sAndEMatch[1]);
+      queryEpisode = Number(sAndEMatch[2]);
+    } else {
+      const epOnlyMatch = /(?:^|[^a-z0-9])(?:ep?|episode|capitulo|cap)\.?\s*0*(\d+)(?:[^a-z0-9]|$)/i.exec(rawFilename)
+        || /(?:-\s*0*(\d+)\b|[[(]0*(\d+)[\])])/i.exec(rawFilename);
+      if (epOnlyMatch) {
+        queryEpisode = Number(epOnlyMatch[1] || epOnlyMatch[2]);
+      }
+    }
+  }
+
   const preferredFormat: 'srt' | 'vtt' = rawFilename.toLowerCase().endsWith('.vtt') || targetUrl.toLowerCase().endsWith('.vtt')
     ? 'vtt'
     : 'srt';
@@ -283,19 +277,55 @@ export async function handleUnifiedSubtitleProxy(req: Request, res: Response): P
     });
 
     const rawBuffer = Buffer.from(upstreamRes.data);
-    const { buffer: cleanBuffer, formatHint, filename: extractedFilename } = decompressBuffer(rawBuffer);
-    const effectiveFormat = formatHint || preferredFormat;
-    const finalFilename = extractedFilename || rawFilename;
+    const extraction = extractSubtitleFromArchive(rawBuffer, {
+      type: queryType,
+      season: querySeason,
+      episode: queryEpisode,
+      targetLang: queryLang,
+      preferredFormat
+    });
+
+    const cleanBuffer = extraction.buffer;
+    const finalFilename = extraction.filename || rawFilename;
+    const detectedFormat = extraction.format;
+    const effectiveFormat = detectedFormat || preferredFormat;
 
     const utf8Text = toCleanUtf8(cleanBuffer);
-    const validation = validateAndFormatSubtitle(utf8Text, effectiveFormat);
+
+    // Smart conditional ASS/SSA to WebVTT conversion
+    const isAss = detectedFormat === 'ass' || detectedFormat === 'ssa' || isAssOrSsa(utf8Text, finalFilename);
+
+    if (isAss) {
+      const nativeAssSupported = clientSupportsNativeAss(req.headers['user-agent'], clientParam);
+
+      if (nativeAssSupported && req.query.format !== 'vtt') {
+        // Device/player natively supports ASS styling (e.g. Stremio Desktop with MPV)
+        sendSubtitleResponse(res, utf8Text, 'ass', finalFilename);
+        return;
+      }
+
+      // Convert ASS/SSA to clean WebVTT for browsers, smart TVs, and web players
+      const vttContent = convertAssToVtt(utf8Text);
+      const vttFilename = finalFilename.replace(/\.(ass|ssa)$/i, '.vtt');
+      sendSubtitleResponse(res, vttContent, 'vtt', vttFilename);
+      return;
+    }
+
+    const validation = validateAndFormatSubtitle(utf8Text, effectiveFormat === 'vtt' ? 'vtt' : 'srt');
 
     if (!validation.valid) {
       Logger.warn(`Invalid subtitle delivered from ${targetUrl}: ${validation.reason}`);
-      res.status(502);
+      // Safe fallback: do not return 500/502 to avoid crashing player
+      const emptySubtitle = preferredFormat === 'vtt' ? 'WEBVTT\n\n' : '1\n00:00:00,000 --> 00:00:01,000\n \n';
+      res.status(200);
       res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      res.send(`Falha ao processar legenda do servidor remoto: ${validation.reason}`);
+      res.setHeader('Access-Control-Allow-Headers', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+      res.setHeader('Content-Type', preferredFormat === 'vtt' ? 'text/vtt; charset=utf-8' : 'text/plain; charset=utf-8');
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(finalFilename)}"`);
+      res.setHeader('X-Subtitle-Fallback', 'true');
+      res.setHeader('X-Subtitle-Fallback-Reason', encodeURIComponent(validation.reason || 'invalid_subtitle'));
+      res.send(emptySubtitle);
       return;
     }
 
@@ -303,10 +333,17 @@ export async function handleUnifiedSubtitleProxy(req: Request, res: Response): P
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     Logger.error(`Subtitle proxy fetch failed for ${targetUrl}: ${errorMsg}`, err);
-    res.status(502);
+    // Safe fallback to prevent breaking video playback
+    const emptySubtitle = preferredFormat === 'vtt' ? 'WEBVTT\n\n' : '1\n00:00:00,000 --> 00:00:01,000\n \n';
+    res.status(200);
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.send(`Erro na conexão com o provedor de legenda: ${errorMsg}`);
+    res.setHeader('Access-Control-Allow-Headers', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Content-Type', preferredFormat === 'vtt' ? 'text/vtt; charset=utf-8' : 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(rawFilename)}"`);
+    res.setHeader('X-Subtitle-Fallback', 'true');
+    res.setHeader('X-Subtitle-Fallback-Reason', encodeURIComponent(errorMsg));
+    res.send(emptySubtitle);
   }
 }
 
@@ -422,14 +459,33 @@ export async function handleOpenSubtitlesRestDownload(req: Request, res: Respons
     const finalFilename = extractedFilename || filename;
 
     const utf8Text = toCleanUtf8(cleanBuffer);
-    const validation = validateAndFormatSubtitle(utf8Text, effectiveFormat);
+    const isAss = effectiveFormat === 'ass' || effectiveFormat === 'ssa' || isAssOrSsa(utf8Text, finalFilename);
+    if (isAss) {
+      const nativeAssSupported = clientSupportsNativeAss(req.headers['user-agent'], req.query.client as string);
+      if (nativeAssSupported && req.query.format !== 'vtt') {
+        sendSubtitleResponse(res, utf8Text, 'ass', finalFilename);
+        return;
+      }
+      const vttContent = convertAssToVtt(utf8Text);
+      const vttFilename = finalFilename.replace(/\.(ass|ssa)$/i, '.vtt');
+      sendSubtitleResponse(res, vttContent, 'vtt', vttFilename);
+      return;
+    }
+
+    const validation = validateAndFormatSubtitle(utf8Text, effectiveFormat === 'vtt' ? 'vtt' : 'srt');
 
     if (!validation.valid) {
       Logger.warn(`Invalid subtitle delivered from OpenSubtitles for file ${fileId}: ${validation.reason}`);
-      res.status(502);
+      const emptySubtitle = preferredFormat === 'vtt' ? 'WEBVTT\n\n' : '1\n00:00:00,000 --> 00:00:01,000\n \n';
+      res.status(200);
       res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      res.send(`Falha ao processar legenda do OpenSubtitles: ${validation.reason}`);
+      res.setHeader('Access-Control-Allow-Headers', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+      res.setHeader('Content-Type', preferredFormat === 'vtt' ? 'text/vtt; charset=utf-8' : 'text/plain; charset=utf-8');
+      res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(finalFilename)}"`);
+      res.setHeader('X-Subtitle-Fallback', 'true');
+      res.setHeader('X-Subtitle-Fallback-Reason', encodeURIComponent(validation.reason || 'invalid_subtitle'));
+      res.send(emptySubtitle);
       return;
     }
 
@@ -437,10 +493,16 @@ export async function handleOpenSubtitlesRestDownload(req: Request, res: Respons
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     Logger.error(`OpenSubtitles buffer parsing failed for file ${fileId}: ${errorMsg}`, err);
-    res.status(502);
+    const emptySubtitle = preferredFormat === 'vtt' ? 'WEBVTT\n\n' : '1\n00:00:00,000 --> 00:00:01,000\n \n';
+    res.status(200);
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.send(`Erro ao processar arquivo de legenda do OpenSubtitles: ${errorMsg}`);
+    res.setHeader('Access-Control-Allow-Headers', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Content-Type', preferredFormat === 'vtt' ? 'text/vtt; charset=utf-8' : 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(filename)}"`);
+    res.setHeader('X-Subtitle-Fallback', 'true');
+    res.setHeader('X-Subtitle-Fallback-Reason', encodeURIComponent(errorMsg));
+    res.send(emptySubtitle);
   }
 }
 
@@ -482,6 +544,10 @@ export async function handleShortIdDownload(req: Request, res: Response): Promis
   req.query.url = entry.originalUrl;
   req.query.filename = entry.filename;
   req.query.provider = entry.provider;
+  if (entry.type) req.query.type = entry.type;
+  if (entry.season !== undefined) req.query.season = String(entry.season);
+  if (entry.episode !== undefined) req.query.episode = String(entry.episode);
+  if (entry.lang) req.query.lang = entry.lang;
   return handleUnifiedSubtitleProxy(req, res);
 }
 

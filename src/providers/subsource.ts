@@ -108,7 +108,10 @@ export class SubsourceProvider extends BaseSubtitleProvider {
       const isHI = Boolean(sub.hearingImpaired || /\[cc\]|\[hi\]|\(hi\)/i.test(releaseName));
 
       const downloadUrl = `https://api.subsource.net/api/v1/subtitles/${sub.subtitleId}/download`;
-      const proxyUrl = `/sub/proxy?url=${encodeURIComponent(downloadUrl)}&apiKey=${encodeURIComponent(apiKey)}&filename=${encodeURIComponent(releaseName + '.srt')}&provider=subsource`;
+      let proxyUrl = `/sub/proxy?url=${encodeURIComponent(downloadUrl)}&apiKey=${encodeURIComponent(apiKey)}&filename=${encodeURIComponent(releaseName + '.srt')}&provider=subsource&lang=${encodeURIComponent(rawLang)}`;
+      if (query.type) proxyUrl += `&type=${encodeURIComponent(query.type)}`;
+      if (query.season != null) proxyUrl += `&season=${encodeURIComponent(String(query.season))}`;
+      if (query.episode != null) proxyUrl += `&episode=${encodeURIComponent(String(query.episode))}`;
 
       items.push({
         id: `subsource-${sub.subtitleId}`,

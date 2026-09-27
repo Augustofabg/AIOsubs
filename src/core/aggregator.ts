@@ -135,7 +135,15 @@ export async function getAggregatedSubtitles(
         const ext = item.format === 'vtt' || finalUrl.toLowerCase().endsWith('.vtt') ? '.vtt' : '.srt';
         const safeBaseName = (item.release || item.id).replace(/[^a-zA-Z0-9._-]/g, '_');
         const safeFilename = safeBaseName.endsWith(ext) ? safeBaseName : `${safeBaseName}${ext}`;
-        finalUrl = `${baseUrl}/sub/proxy?url=${encodeURIComponent(finalUrl)}&filename=${encodeURIComponent(safeFilename)}`;
+        const queryParams = new URLSearchParams({
+          url: finalUrl,
+          filename: safeFilename
+        });
+        if (query.type) queryParams.set('type', query.type);
+        if (query.season !== undefined) queryParams.set('season', String(query.season));
+        if (query.episode !== undefined) queryParams.set('episode', String(query.episode));
+        if (item.lang) queryParams.set('lang', item.lang);
+        finalUrl = `${baseUrl}/sub/proxy?${queryParams.toString()}`;
       }
     }
 
