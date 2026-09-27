@@ -1,6 +1,7 @@
 import { BaseSubtitleProvider } from './base';
 import { SubtitleQuery, ProviderContext, RawSubtitleItem } from '../types/provider';
 import { ENV } from '../config/env';
+import { mapWhitelistToOpenSubtitles } from '../utils/languages';
 
 interface OpenSubtitlesRestItem {
   id: string;
@@ -15,6 +16,7 @@ interface OpenSubtitlesRestItem {
     release: string;
     comments?: string;
     url?: string;
+    legacy_subtitle_id?: number;
     files: Array<{
       file_id: number;
       cd_number: number;
@@ -55,7 +57,11 @@ export class OpenSubtitlesProvider extends BaseSubtitleProvider {
       imdb_id: cleanImdb
     };
 
-    if (query.season !== null && query.episode !== null) {
+    if (query.type === 'series' && query.season !== null && query.episode !== null) {
+      params.season_number = query.season;
+      params.episode_number = query.episode;
+      params.type = 'episode';
+    } else if (query.season !== null && query.episode !== null) {
       params.season_number = query.season;
       params.episode_number = query.episode;
       params.type = 'episode';
@@ -63,9 +69,14 @@ export class OpenSubtitlesProvider extends BaseSubtitleProvider {
       params.type = 'movie';
     }
 
-    // Native language filter: convert whitelist into comma separated string
-    if (context.config.languages && context.config.languages.length > 0) {
-      params.languages = context.config.languages.join(',');
+    // Native language filter: convert whitelist into OpenSubtitles API v1 format
+    const effectiveLangs = (context.config.languages && context.config.languages.length > 0)
+      ? context.config.languages
+      : ['pob', 'eng'];
+    const activeRemap = context.config.language_remapping || context.config.languageRemap;
+    const osLangs = mapWhitelistToOpenSubtitles(effectiveLangs, activeRemap);
+    if (osLangs.length > 0) {
+      params.languages = osLangs.join(',');
     }
 
     const response = await this.httpGet<OpenSubtitlesRestResponse>(
@@ -94,9 +105,10 @@ export class OpenSubtitlesProvider extends BaseSubtitleProvider {
 
       const file = attr.files[0];
       const fileId = file.file_id;
+      const legacyId = attr.legacy_subtitle_id || '';
       const fileName = file.file_name || attr.release || `${query.id}.srt`;
 
-      const downloadProxyUrl = `/proxy/download/os-rest/${fileId}?filename=${encodeURIComponent(fileName)}&apiKey=${encodeURIComponent(apiKey)}`;
+      const downloadProxyUrl = `/proxy/download/os-rest/${fileId}?filename=${encodeURIComponent(fileName)}&apiKey=${encodeURIComponent(apiKey)}${legacyId ? `&legacyId=${encodeURIComponent(String(legacyId))}` : ''}`;
 
       items.push({
         id: `os-${item.id || fileId}`,

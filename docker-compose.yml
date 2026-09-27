@@ -1,11 +1,11 @@
 version: '3.8'
 
 services:
-  aio-subtitles:
+  aiosubs:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: aio-subtitles
+    container_name: aiosubs
     restart: unless-stopped
     ports:
       - "7000:7000"

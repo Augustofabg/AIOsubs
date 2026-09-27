@@ -34,3 +34,4 @@ if ! command -v ffmpeg &> /dev/null && [ ! -f "bin/ffmpeg" ]; then
 fi
 
 echo "==> Render build finished successfully!"
+

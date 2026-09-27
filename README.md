@@ -1,144 +1,236 @@
-# 🎬 AIO Subtitles — Universal Subtitle Aggregator for Stremio & Nuvio
+<div align="center">
 
-[![Node.js Version](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen.svg)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/typescript-%5E5.7.0-blue.svg)](https://www.typescriptlang.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Docker Ready](https://img.shields.io/badge/docker-ready-blue.svg)](https://www.docker.com/)
+<img src="src/web/public/assets/AIOsubs_logo_wordmark.png" width="220" height="220" alt="AIOSubs logo">
 
-**AIO Subtitles** é um addon de alto desempenho para [Stremio](https://stremio.com) e [Nuvio](https://nuvioapp.com) focado EXCLUSIVAMENTE em **agregação, filtragem e organização de legendas**.
+# AIOSubs
 
-A interface segue de perto o padrão visual e de navegação consagrado pelo **AIOStreams** (tema escuro, sidebar fixa de ícones à esquerda, barra superior com indicador de *"Unsaved changes"*, botões de *Restore*, *Discard*, alternância de rascunhos, botões *Previous* / *Next* de wizard, e cards de serviços/addons com toggle, editar e excluir).
+**Universal subtitle aggregator for Stremio & Nuvio**
 
-> [!NOTE]
-> **Arquitetura Limpa e Estabilidade**: O addon devolve as legendas ao player diretamente com o `id` e `url` originais do provedor e o `lang` estritamente normalizado para o padrão ISO 639-2. Não há camadas frágeis de templates ou proxies de renomeação, garantindo total compatibilidade com todos os players (Stremio Desktop, Web, Android, Android TV e Nuvio) sem vazamento de base64 ou abas "Desconhecido".
+![My Skills](https://skillicons.dev/icons?i=ts,nodejs,js,html,css,docker)
+[![Supabase](https://skillicons.dev/icons?i=supabase)](https://supabase.com/)
+
+[![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Render Deploy](https://img.shields.io/badge/deploy-Render-46E3B7.svg)](https://render.com/)
+
+<p align="center">
+    <a href="https://github.com/Augustofabg/AIOsubs/actions/workflows/docker-build.yml">
+        <img src="https://img.shields.io/github/actions/workflow/status/Augustofabg/AIOsubs/docker-build.yml?style=for-the-badge&logo=github" alt="Build Status">
+    </a>
+   <a href="https://github.com/Augustofabg/AIOsubs/releases/latest">
+        <img src="https://img.shields.io/github/v/release/Augustofabg/AIOsubs?style=for-the-badge&logo=github" alt="Latest Release">
+    </a>
+    <a href="https://github.com/Augustofabg/AIOsubs/stargazers">
+        <img src="https://img.shields.io/github/stars/Augustofabg/AIOsubs?style=for-the-badge&logo=github" alt="GitHub Stars">
+    </a>
+    <a href="https://github.com/Augustofabg/AIOsubs/network/members">
+        <img src="https://img.shields.io/github/forks/Augustofabg/AIOsubs?style=for-the-badge&logo=github" alt="GitHub Forks">
+    </a>
+</p>
+
+</div>
+
+## What is AIOSubs?
+
+AIOSubs was built to give you total control over subtitles in Stremio or Nuvio. Instead of juggling multiple subtitle addons, each with its own configuration and limitations, AIOSubs works as a central hub. It pulls results from all your configured sources, then deduplicates, filters, remaps languages, and formats everything according to your rules, delivering a single clean list right inside the player.
+
+Whether you're a casual user who just wants a tidy subtitle list, or someone who likes fine-tuning every detail, AIOSubs adapts to you.
+
+The configuration interface follows the same dark theme with purple accents made popular by **AIOStreams**. If you already use AIOStreams, the workflow will feel familiar.
+
+<img src="src/web/public/assets/readme/aiosubs_landing.png" alt="AIOSubs landing">
+
+
+## 📑 Table of Contents
+
+- [Features](#-features)
+- [How to run](#-how-to-run)
+- [Deploy on Render](#-deploy-on-render)
+- [Environment variables](#️-environment-variables)
+- [Tests](#-tests)
+<br>
+
+## ✨ Features
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+**- AIOStreams-style interface**
+Home screen with two paths: `Configure`, to start from scratch, or `Dashboard`, to load a saved configuration via UUID + password. A step-by-step wizard guides the whole setup, with no visual clutter.
+
+**- Native providers with real-time validation**
+Official support for **OpenSubtitles.com** (API v1), **SubDL**, and **Subsource**, each with its own field for the API key. The OpenSubtitles key is validated live (`✓ / ✗`), testing the actual connection to the service before proceeding.
+
+**- Free-form addon import**
+Paste the URL of any Stremio subtitle addon's `manifest.json` and AIOSubs imports it automatically. It detects the name and icon, and checks whether the addon actually exposes the `subtitles` resource. Each one can be enabled/disabled individually, with an option for parallel search across all of them.
+
+</td>
+<td width="50%" valign="top">
+
+**- No more "Unknown" subtitles**
+Language whitelist with flags (🇧🇷 `pob`, 🇵🇹 `por`, 🇺🇸 `eng`...). Remapping rules automatically unify regional variants (`pt-br` → `pob`, `pt` → `por`), and everything is canonicalized to **ISO 639-2** — no more broken tabs in the player.
+
+**- Smart deduplication**
+Compare by content hash, fuzzy release-name similarity (85%+), or both combined. Then simply reorder providers and addons by priority by dragging them in the list.
+
+**- Secure persistence**
+Configurations are saved in **Supabase**, with fallback to traditional PostgreSQL or a local file in development. Passwords are never stored in plain text — everything goes through **bcrypt** hashing before being saved.
+
+</td>
+</tr>
+</table>
+
+**📱 Install in seconds:** direct buttons for Stremio Desktop and Web, plus a QR Code generated on the spot to install on Nuvio or Stremio mobile without typing anything.
 
 ---
 
-## 🚀 Funcionalidades Principais
+## 🚀 How to run
 
-### 1. 🌐 Interface no Padrão AIOStreams
-* **Sidebar Fixa:** Navegação lateral com ícones e tooltips para **Home**, **Services**, **Addons**, **Filters** e **Settings**.
-* **Topbar de Ação Rápida:**
-  * Indicador dinâmico de alterações: pill verde *"All changes saved"* ou pill pulsante âmbar *"Unsaved changes"*.
-  * Botões **Restore** (reverte alterações para o último estado salvo) e **Discard** (redefine para as configurações padrão).
-  * Toggle *"Don't keep drafts on this browser"* (armazena preferência no navegador).
-  * Navegação de wizard com botões **Previous** e **Next**.
-  * Botão de destaque **Save & Install** (com ícone de disquete).
-  * Botões sociais **Donate** e **Sign Out**.
+### Locally, with Node.js
 
-### 2. 🏠 Home (Branding da Instância)
-* **Nome do Addon Editável:** Altere o nome exibido (ex.: `AIOSubtitles`) com edição inline via ícone de lápis.
-* **Logo / Ícone Customizado:** URL de logo editável em tempo real.
-* **Descrição Curta:** Descrição configurável inline (ex.: `Agregador e organizador de legendas`).
-* **Versão:** Exibição da versão da instância (ex.: `v1.0.0`).
-* **Your configuration:** Seção com estatísticas ativas e botões de ação rápida:
-  * **Continue setup:** Avança para a página de Services no wizard.
-  * **Save & Install:** Gera a manifest URL final e abre o modal de instalação.
-
-### 3. ⚡ Services (Fontes Nativas de Legenda com API Keys)
-Cada conector nativo possui seu próprio card com nome, badge de status e toggle on/off:
-* **OpenSubtitles REST:** Badge `Requer API Key`. API oficial v1 com suporte a busca nativa por idioma e metadados detalhados. Inclui campo de input para a chave do usuário e botão **"Testar conexão"** com ping de validação em tempo real.
-* **SubDL:** Badge `Público`. Banco de dados massivo com legendas em múltiplos idiomas e releases. Campo opcional para API key pessoal para limites maiores de requisições.
-* **Subsource:** Badge `Público`. Comunidade colaborativa com legendas revisadas para filmes e séries.
-* **Addic7ed:** Badge `Público`. Especializado em episódios e lançamentos rápidos de séries de TV.
-
-### 4. 🧩 Addons (Importação Livre por Manifest URL & Marketplace)
-* **Aba Installed:**
-  * Campo de importação rápida: Cole a URL (`https://.../manifest.json` ou `stremio://...`) de qualquer addon de legendas. O backend valida a presença do recurso `subtitles` e lê automaticamente o `name`, `id` e `logo` do manifest.
-  * Proteção de layout: A URL completa é truncada com reticências (`text-overflow: ellipsis`) e conta com botão dedicado de **"Copiar URL"**.
-  * Lista agrupada na seção **LEGENDAS**, onde cada addon possui ícone, nome, toggle on/off, botão de configurações (engrenagem), editar (lápis) e excluir (lixeira).
-  * Seletor de rodapé **Addon Fetching Strategy** (padrão: *Default* = busca paralela de todos os addons antes de retornar resultados).
-* **Aba Marketplace:**
-  * Catálogo integrado com 1-clique para adicionar os addons de legenda mais populares do ecossistema: OpenSubtitles v3, LegendasDivx.pt, Podnapisi, Titlovi.
-
-### 5. 🎛️ Filters (Idiomas, Remapeamento, Deduplicação e Prioridade)
-* **Idiomas Permitidos (Whitelist):** Seletor multi-select com busca e bandeiras emoji (ex: 🇧🇷 `pob`, 🇵🇹 `por`, 🇺🇸 `eng`). Descarta legendas em idiomas indesejados de todos os conectores.
-* **Remapeamento de Código de Idioma:** Tabela visual "De &rarr; Para" editável (regras padrão: `por -> pob`, `pt-br -> pob`, `pt -> pob`, `pt-pt -> por`). Unifica legendas com códigos diferentes na **mesma aba/categoria do player**.
-* **Prevenção do Idioma "Desconhecido":** Canonicalização estrita para ISO 639-2 antes de responder ao Stremio. Qualquer código inválido é descartado com log estruturado, impedindo que o player crie abas quebradas.
-* **Deduplicação Inteligente:** Toggle on/off com seletor de estratégia:
-  * *Ambos (Hash de Conteúdo + Similaridade de Release Fuzzy >85%)*
-  * *Apenas Hash de Conteúdo e URL*
-  * *Apenas Similaridade de Release (Fuzzy)*
-* **Prioridade de Provedores e Addons:** Lista reordenável com botões de subir/descer prioridade, determinando a ordem de exibição final no player.
-* **Timeout por Conector:** Slider configurável de 2000ms a 15000ms (padrão 6000ms) com display em tempo real.
-
-### 6. 💾 Settings & Instalação
-* Geração instantânea da URL do manifest com a configuração codificada em **Base64URL**:
-  `https://SEU_DOMINIO/:config/manifest.json`
-* Botão **"Instalar no Stremio"** com deep link `stremio://`.
-* Modal **"Instalar no Nuvio (QR Code)"** gerando código QR legível na tela.
-* Slider para ajuste do tempo de cache em memória (5 a 120 minutos, padrão 30 min).
-* Ferramentas de **Backup e Restauração em JSON** para salvar ou importar suas configurações facilmente.
-
----
-
-## 🛠️ Tecnologias
-
-* **Runtime:** Node.js 20+ / 22+ / 24+
-* **Linguagem:** TypeScript
-* **Servidor HTTP:** Express + CORS + Express Rate Limit
-* **Frontend SPA:** HTML5 + CSS3 (Design System escuro estilo AIOStreams) + JavaScript Moderno + QRCode.js
-* **Cache:** `lru-cache` em memória
-
----
-
-## 🚀 Como Executar
-
-### 1. Execução Local
+Prerequisites: **Node.js 20+** and **Git**.
 
 ```bash
-# Instalar dependências
+# Clone the repository
+git clone https://github.com/Augustofabg/AIOsubs.git
+cd AIOsubs
+
+# Install dependencies
 npm install
 
-# Rodar em modo de desenvolvimento com hot-reload
-npm run dev
+# (Optional) set up environment variables
+cp .env.example .env
 
-# Rodar a suíte de testes automatizados
-npm test
-
-# Compilar para produção
+# Build the project
 npm run build
 
-# Iniciar servidor compilado
+# Development mode (with auto-reload)
+npm run dev
+
+# Or production
 npm start
 ```
 
-Acesse no navegador:
-* **Interface de Configuração:** `http://localhost:7000/configure`
-* **Manifest Padrão:** `http://localhost:7000/manifest.json`
-* **Health Check:** `http://localhost:7000/health`
+Addresses available after starting:
 
-### 2. Execução com Docker
+| Resource | URL |
+| :--- | :--- |
+| Configuration interface | `http://localhost:7000/configure` |
+| Default manifest | `http://localhost:7000/manifest.json` |
+| Health check | `http://localhost:7000/health` |
+
+### With Docker
+
+The repository includes a multi-stage `Dockerfile` based on Alpine, running with a non-privileged user.
 
 ```bash
-# Construir imagem Docker
-docker build -t aio-subtitles .
+docker build -t aiosubs .
 
-# Executar contêiner na porta 7000
-docker run -d -p 7000:7000 --name aio-subtitles aio-subtitles
+docker run -d \
+  -p 7000:7000 \
+  --name aiosubs \
+  --restart unless-stopped \
+  aiosubs
 ```
 
-### 3. Execução com Docker Compose
+### With Docker Compose
 
 ```bash
 docker compose up -d
+
+# Follow the logs
+docker compose logs -f
 ```
-
-### 4. Deploy no Render / Plataformas Cloud (Persistência com PostgreSQL)
-
-No Render (e plataformas como Neon, Supabase ou Railway), o sistema de arquivos padrão de contêineres é efémero (ephemeral). Para garantir que suas contas, UUIDs e configurações nunca sejam perdidos após reinicializações ou novos deploys:
-
-1. No painel do Render, crie um **PostgreSQL** gerenciado gratuito (ou crie no **Neon** / **Supabase**).
-2. Na sua aplicação Web Service no Render, configure a variável de ambiente:
-   * `DATABASE_URL`: URL de conexão fornecida pelo PostgreSQL (ex: `postgres://user:password@host/dbname?sslmode=require`)
-3. O AIOSubs detecta automaticamente o `DATABASE_URL`:
-   * Cria a tabela `configurations` com colunas `uuid`, `password_hash` (bcrypt), `config_data` (JSONB) e timestamps.
-   * Mantém um cache ultra-rápido em memória e sincronização assíncrona com o banco.
-   * Migra automaticamente qualquer dado local existente sem perda.
-4. Se `DATABASE_URL` não for definido (ex: desenvolvimento local), a aplicação usa automaticamente o armazenamento local em arquivo JSON (`./data/configurations.json`).
 
 ---
 
-## 📄 Licença
+## 🌐 Deploy on Render
 
-Distribuído sob a licença [MIT](LICENSE).
+> [!TIP]
+> **Why Render?**
+> - **Automatic HTTPS** — Stremio Web and modern apps require a secure connection, and Render provides this for free.
+> - **Always online** — no need to keep your own computer running 24/7.
+> - **Zero network configuration** — no port forwarding, NAT, or DDNS required.
+> - **Direct Supabase integration** — configurations persist across deploys.
+> - **Continuous deployment** — every push to the `main` branch automatically ships a new version.
+
+**1. Create the database on Supabase**
+1. Create a free account at [supabase.com](https://supabase.com/).
+2. Create a new project (e.g., `aiosubs-db`).
+3. In **Project Settings → API**, copy the **Project URL** and the **anon/service_role key**.
+
+**2. Create the web service on Render**
+1. Create an account at [render.com](https://render.com/).
+2. From the dashboard, click **New + → Web Service** and connect the `AIOsubs` repository (branch `main`).
+3. Fill in:
+
+   | Field | Value |
+   | :--- | :--- |
+   | Name | `AIOsubs` (or a name of your choice) |
+   | Region | The one closest to you |
+   | Branch | `main` |
+   | Runtime | `Node` |
+   | Build Command | `npm run render-build` |
+   | Start Command | `npm start` |
+   | Instance Type | `Free` |
+
+**3. Set the environment variables**
+
+| Variable | Value | Description |
+| :--- | :--- | :--- |
+| `PORT` | `7000` | Internal port the server listens on |
+| `NODE_ENV` | `production` | Runtime environment |
+| `BASE_URL` | `https://your-app.onrender.com` | Public URL generated by Render |
+| `SUPABASE_URL` | `https://xxxxxxxxxxxx.supabase.co` | URL of your Supabase project |
+| `SUPABASE_KEY` | `your-key-here` | Supabase API key |
+| `CACHE_TTL_MINUTES` | `30` | Cache duration for searches |
+
+> [!NOTE]
+> Want to offer default keys for users who don't want to set up their own? Also add `OPENSUBTITLES_API_KEY` and `SUBDL_API_KEY`.
+
+**4. Deploy**
+Click **Deploy Web Service** and wait for the build to finish — the log will show `🚀 AIOSubtitles Stremio Addon listening...`. Go to the generated URL at `/configure`, set things up through the interface, copy the link or scan the QR Code. Subtitles ready anywhere. 🎉
+
+---
+
+## ⚙️ Environment variables
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `PORT` | `7000` | Port the HTTP server listens on |
+| `HOST` | `0.0.0.0` | Network listening host |
+| `BASE_URL` | `""` | Public absolute URL of the application |
+| `SUPABASE_URL` | `""` | URL of the Supabase instance |
+| `SUPABASE_KEY` | `""` | Public/secret Supabase API key |
+| `DATABASE_URL` | `""` | Alternative connection string for PostgreSQL |
+| `OPENSUBTITLES_API_KEY` | `""` | Server-level fallback OpenSubtitles key |
+| `SUBDL_API_KEY` | `""` | Server-level fallback SubDL key |
+| `CACHE_TTL_MINUTES` | `30` | Duration of the results LRU cache |
+| `RATE_LIMIT_MAX` | `150` | Maximum requests per minute |
+| `NODE_ENV` | `development` | Runtime environment |
+
+---
+
+## 🧪 Tests
+
+Test suite covering the entire pipeline, from provider to final subtitle delivery:
+
+```bash
+npm test                    # Run everything at once
+
+npm run test:providers      # Native providers and ISO 639-2 normalization
+npm run test:formatter      # Formatting and cleanup for players (Nuvio)
+npm run test:alignment      # Alignment/sync with fallback
+npm run test:supabase       # Cloud persistence and bcrypt security
+npm run test:validation     # Interface flow and OpenSubtitles headers
+```
+
+---
+
+## ⚠️ Disclaimer
+
+AIOSubs is a tool for aggregating and managing data from other Stremio subtitle addons. It does not host, store, or distribute any content. The developer does not endorse or promote access to copyrighted content. Users are solely responsible for complying with all applicable laws and the terms of service of any addons or services they use with AIOSubs.
+
+## 🙏 Credits
+
+This project wouldn't be possible without the foundational work of many others in the community, especially those who develop the addons that AIOSubs integrates. Special thanks to **[AIOStreams](https://github.com/Viren070/AIOStreams)**, the project that served as a direct inspiration for AIOSubs' interface and aggregation philosophy, to the developers of all integrated addons, and to the open-source projects that inspired parts of AIOSubs' design.

@@ -52,8 +52,8 @@ html = html.replace(
 
 // Sidebar GitHub icon
 html = html.replace(
-  /<a href="https:\/\/github.com\/Augustofabg\/aio-subtitles" target="_blank" class="nav-item" title="Repositório GitHub">[\s\S]*?<\/a>/,
-  `<a href="https://github.com/Augustofabg/aio-subtitles" target="_blank" class="nav-item" title="Repositório GitHub">\n          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">\n            <path d="${getSiPath('siGithub')}"/>\n          </svg>\n        </a>`
+  /<a href="https:\/\/github.com\/Augustofabg\/(?:aio-subtitles|AIOsubs)" target="_blank" class="nav-item"[^>]*>[\s\S]*?<\/a>/,
+  `<a href="https://github.com/Augustofabg/AIOsubs" target="_blank" class="nav-item" title="Repositório GitHub">\n          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">\n            <path d="${getSiPath('siGithub')}"/>\n          </svg>\n        </a>`
 );
 
 // Topbar Load Config

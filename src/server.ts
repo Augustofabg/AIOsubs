@@ -8,14 +8,14 @@ import QRCode from 'qrcode';
 
 import { ENV } from './config/env';
 import { StremioManifest } from './types/stremio';
-import { decodeUserConfig, decodeUserConfigAsync } from './config/userConfig';
-import { parseSubtitleQuery, getAggregatedSubtitles } from './core/aggregator';
-import { handleSubtitleProxy, handleOpenSubtitlesRestDownload, handleShortIdDownload } from './proxy/subtitleProxy';
-import { SUPPORTED_LANGUAGES } from './utils/languages';
+import { decodeUserConfig, decodeUserConfigAsync, mergeWithDefaults } from './config/userConfig';
+import { handleSubtitleProxy, handleOpenSubtitlesRestDownload, handleShortIdDownload, handleUnifiedSubtitleProxy } from './proxy/subtitleProxy';
 import { getAllProviders } from './providers';
 import { globalSubtitleCache } from './utils/cache';
 import { Logger } from './utils/logger';
 import { configStorage, isUuid } from './storage/configStore';
+import { parseSubtitleQuery, getAggregatedSubtitles } from './core/aggregator';
+import { SUPPORTED_LANGUAGES } from './utils/languages';
 import { alignSubtitle, detectAvailableTools } from './services/alignment';
 
 export function createServer(): express.Application {
@@ -47,39 +47,24 @@ export function createServer(): express.Application {
     return `${protocol}://${host}`;
   };
 
-  const buildManifest = async (configEncoded?: string): Promise<StremioManifest> => {
-    let name = 'AIOSubs';
-    let description = 'Dedicated subtitle aggregator and organizer for Stremio and Nuvio.';
-    let logo = '/assets/AIOsubs_logo_wordmark.png';
-    let version = '1.0.0';
+  const buildManifest = async (encodedConfig?: string): Promise<StremioManifest> => {
+    const config = await decodeUserConfigAsync(encodedConfig);
+    const activeProviders = Object.keys(config.providers).filter(
+      id => config.providers[id]?.enabled
+    );
+    const activeAddons = config.customAddons.filter(a => a.enabled);
+    const totalActive = activeProviders.length + activeAddons.length;
 
-    if (configEncoded) {
-      try {
-        const userCfg = await decodeUserConfigAsync(configEncoded);
-        if (userCfg.instanceName && userCfg.instanceName.trim() !== '') {
-          name = userCfg.instanceName.trim();
-        }
-        if (userCfg.instanceDesc && userCfg.instanceDesc.trim() !== '') {
-          description = userCfg.instanceDesc.trim();
-        }
-        if (userCfg.instanceLogo && userCfg.instanceLogo.trim() !== '') {
-          logo = userCfg.instanceLogo.trim();
-        }
-        if (userCfg.instanceVersion && userCfg.instanceVersion.trim() !== '') {
-          version = userCfg.instanceVersion.trim().replace(/^v/i, '');
-        }
-      } catch {
-        // Use default branding on decode failure
-      }
-    }
+    const description = config.instanceDesc || (totalActive > 0
+      ? `Agregador de legendas com ${totalActive} fonte(s) ativas.`
+      : 'Agregador universal de legendas para Stremio.');
 
     return {
-      id: 'org.aiosubtitles.addon',
-      version,
-      name,
+      id: 'community.aiosubtitles',
+      version: config.instanceVersion || '1.0.0',
+      name: config.instanceName || 'AIOSubs',
       description,
-      logo,
-      background: 'https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?auto=format&fit=crop&w=1920&q=80',
+      logo: config.instanceLogo || '/assets/AIOsubs_logo_wordmark.png',
       resources: [
         {
           name: 'subtitles',
@@ -114,7 +99,12 @@ export function createServer(): express.Application {
   app.get('/health', healthHandler);
   app.get('/api/health', healthHandler);
 
-  app.use('/:config', express.static(publicDir, { index: false }));
+  app.use('/:config', (req: Request, res: Response, next: NextFunction) => {
+    if (['manifest.json', 'subtitles', 'api', 'sub', 'proxy', 'download', 'health', 'assets'].includes(req.params.config)) {
+      return next();
+    }
+    return express.static(publicDir, { index: false })(req, res, next);
+  });
 
   app.get('/api/languages', (_req: Request, res: Response) => {
     res.json({ languages: SUPPORTED_LANGUAGES });
@@ -148,59 +138,47 @@ export function createServer(): express.Application {
     }
 
     inputUrl = inputUrl.trim();
-    if (inputUrl.startsWith('stremio://')) {
-      inputUrl = inputUrl.replace(/^stremio:\/\//, 'https://');
+    if (!inputUrl.startsWith('http://') && !inputUrl.startsWith('https://')) {
+      inputUrl = `https://${inputUrl}`;
     }
 
     if (!inputUrl.toLowerCase().endsWith('/manifest.json')) {
-      inputUrl = `${inputUrl.replace(/\/+$/, '')}/manifest.json`;
+      inputUrl = inputUrl.replace(/\/+$/, '') + '/manifest.json';
     }
 
     try {
       const response = await axios.get(inputUrl, {
         timeout: 8000,
         headers: {
-          'User-Agent': 'AIOSubtitles/1.0.0 (Stremio Addon Validator)',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AIOSubtitles/1.0.0',
           'Accept': 'application/json'
         }
       });
 
-      const manifest = response.data;
-      if (!manifest || typeof manifest !== 'object') {
-        res.status(400).json({ valid: false, error: 'A resposta do endpoint não é um JSON de manifest válido.' });
-        return;
-      }
-
-      const hasSubtitles = Array.isArray(manifest.resources) && manifest.resources.some((r: unknown) => {
-        if (typeof r === 'string') return r.toLowerCase() === 'subtitles';
-        if (typeof r === 'object' && r !== null && 'name' in r) {
-          return String((r as { name: string }).name).toLowerCase() === 'subtitles';
-        }
-        return false;
-      });
-
-      if (!hasSubtitles) {
+      if (response.status !== 200 || !response.data || typeof response.data !== 'object') {
         res.status(400).json({
           valid: false,
-          error: `O addon "${manifest.name || manifest.id || 'Externo'}" não declara o recurso de legendas ('subtitles'). Somente addons que fornecem legendas são suportados.`
+          error: `Resposta inválida do manifest (HTTP ${response.status}). Verifique se a URL está acessível.`
         });
         return;
       }
 
-      const addonName = manifest.name && String(manifest.name).trim() !== ''
-        ? String(manifest.name).trim()
-        : (manifest.id ? String(manifest.id).trim() : 'External Subtitles Addon');
+      const manifest = response.data;
+      const declaredResources = Array.isArray(manifest.resources)
+        ? manifest.resources.map((r: any) => typeof r === 'string' ? r : r.name)
+        : [];
 
-      const declaredResources: string[] = Array.isArray(manifest.resources)
-        ? manifest.resources.map((r: unknown) => {
-            if (typeof r === 'string') return r;
-            if (typeof r === 'object' && r !== null && 'name' in r) {
-              return String((r as { name: string }).name);
-            }
-            return '';
-          }).filter(Boolean)
-        : ['subtitles'];
+      const providesSubtitles = declaredResources.includes('subtitles');
 
+      if (!providesSubtitles) {
+        res.status(400).json({
+          valid: false,
+          error: `O addon "${manifest.name || manifest.id || 'desconhecido'}" não declara o recurso "subtitles" em seu manifest. Recursos declarados: [${declaredResources.join(', ')}]`
+        });
+        return;
+      }
+
+      const addonName = manifest.name || manifest.id || 'Custom Subtitle Addon';
       const isConfigurable = Boolean(manifest.behaviorHints?.configurable || manifest.configurationURL);
       const configurationURL = manifest.configurationURL || (manifest.behaviorHints?.configurable ? inputUrl.replace(/\/manifest\.json$/i, '/configure') : '');
 
@@ -257,7 +235,16 @@ export function createServer(): express.Application {
 
     if (service === 'opensubtitles') {
       try {
-        const response = await axios.get('https://api.opensubtitles.com/api/v1/infos/user', {
+        if (!apiKey || apiKey.length < 16) {
+          res.json({ valid: false, error: 'Chave do OpenSubtitles inválida ou incompleta.' });
+          return;
+        }
+
+        const response = await axios.get('https://api.opensubtitles.com/api/v1/subtitles', {
+          params: {
+            imdb_id: '0133093',
+            _t: Date.now()
+          },
           headers: {
             'Api-Key': apiKey,
             'User-Agent': 'AIOSubs v1.0.0',
@@ -265,17 +252,19 @@ export function createServer(): express.Application {
           },
           timeout: 6000
         });
+
         if (response.status === 200) {
           res.json({ valid: true });
           return;
         }
+
         res.json({ valid: false, error: 'Resposta inesperada do OpenSubtitles' });
       } catch (err: any) {
-        const status = err?.response?.status;
-        const msg = (status === 401 || status === 403)
-          ? 'Chave inválida ou não autorizada no OpenSubtitles'
-          : (err?.response?.data?.message || 'Chave inválida ou sem permissão no OpenSubtitles');
-        res.json({ valid: false, error: msg });
+        console.error('OpenSubtitles validation error:', err.response?.status, err.response?.data || err.message);
+        const errMsg = err.response?.status === 403 || err.response?.status === 401
+          ? 'Chave não autorizada ou inexistente no OpenSubtitles. Verifique se ativou "Under development" no OpenSubtitles.com.'
+          : 'Falha na comunicação com o OpenSubtitles.';
+        res.json({ valid: false, error: errMsg });
       }
       return;
     }
@@ -357,7 +346,8 @@ export function createServer(): express.Application {
       return;
     }
 
-    const saveResult = await configStorage.saveConfigAsync(uuid, password, config);
+    const mergedConfig = mergeWithDefaults(config);
+    const saveResult = await configStorage.saveConfigAsync(uuid, password, mergedConfig);
     if (!saveResult.success) {
       const isDbError = saveResult.error?.includes('Database write failed');
       const statusCode = isDbError ? 500 : 401;
@@ -539,15 +529,21 @@ export function createServer(): express.Application {
     }
   });
 
+  // Unified and legacy subtitle proxy delivery endpoints
+  app.get('/sub/proxy', handleUnifiedSubtitleProxy);
+  app.get('/sub/proxy/:data', handleSubtitleProxy);
+  app.get('/sub/download', handleUnifiedSubtitleProxy);
+  app.get('/proxy/download', handleUnifiedSubtitleProxy);
+  app.get('/proxy/download/subdl', handleUnifiedSubtitleProxy);
+  app.get('/proxy/download/subsource', handleUnifiedSubtitleProxy);
+  app.get('/proxy/subtitle/:data', handleSubtitleProxy);
+  app.get('/proxy/download/os-rest/:fileId', handleOpenSubtitlesRestDownload);
+
   // Direct subtitle download endpoints
   app.get('/download/:id', handleShortIdDownload);
   app.get('/download/:id/:filename', handleShortIdDownload);
   app.get('/sub/:id', handleShortIdDownload);
   app.get('/sub/:id/:filename', handleShortIdDownload);
-
-  // Backward compatibility proxy endpoints
-  app.get('/proxy/subtitle/:data', handleSubtitleProxy);
-  app.get('/proxy/download/os-rest/:fileId', handleOpenSubtitlesRestDownload);
 
   app.use((req: Request, res: Response) => {
     res.status(404).json({ error: 'Endpoint not found', path: req.path });

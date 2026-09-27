@@ -1,25 +1,32 @@
 import { BaseSubtitleProvider } from './base';
 import { SubtitleQuery, ProviderContext, RawSubtitleItem } from '../types/provider';
 
-interface SubsourceSearchItem {
-  id?: string;
-  subId?: string;
-  name?: string;
-  release?: string;
-  lang?: string;
-  language?: string;
-  link?: string;
-  downloadToken?: string;
-  hi?: boolean;
-  hearingImpaired?: boolean;
-  season?: number;
-  episode?: number;
+interface SubsourceMovieItem {
+  movieId: number;
+  title: string;
+  type: string;
+  season?: number | null;
+  imdbId?: string;
 }
 
-interface SubsourceResponse {
-  success?: boolean;
-  subtitles?: SubsourceSearchItem[];
-  data?: SubsourceSearchItem[];
+interface SubsourceSubtitleItem {
+  subtitleId: number;
+  movieId: number;
+  language: string;
+  releaseInfo?: string[];
+  hearingImpaired?: boolean;
+  link?: string;
+  [key: string]: unknown;
+}
+
+interface SubsourceMovieSearchResponse {
+  success: boolean;
+  data?: SubsourceMovieItem[];
+}
+
+interface SubsourceSubtitlesResponse {
+  subtitles?: SubsourceSubtitleItem[];
+  data?: SubsourceSubtitleItem[];
 }
 
 export class SubsourceProvider extends BaseSubtitleProvider {
@@ -44,22 +51,51 @@ export class SubsourceProvider extends BaseSubtitleProvider {
     }
 
     const cleanImdb = query.imdbId.startsWith('tt') ? query.imdbId : `tt${query.imdbId}`;
-    
-    // Subsource movie/series search endpoint
-    const url = `https://api.subsource.net/api/v1/subtitles/search?imdb=${encodeURIComponent(cleanImdb)}`;
+    const timeout = context.timeoutMs || 10000;
 
-    const response = await this.httpGet<SubsourceResponse>(
-      url,
+    // 1. Search Subsource for the movie/show by IMDb ID
+    const movieSearchUrl = 'https://api.subsource.net/api/v1/movies/search';
+    const movieRes = await this.httpGet<SubsourceMovieSearchResponse>(
+      movieSearchUrl,
       {
-        timeout: 10000,
-        headers: {
-          'Referer': 'https://subsource.net/'
-        }
+        params: { imdb: cleanImdb, searchType: 'imdb' },
+        headers: { 'X-API-Key': apiKey },
+        timeout
       },
       signal
     );
 
-    const list = response.data?.subtitles || response.data?.data || [];
+    const moviesList = movieRes.data?.data || [];
+    if (!Array.isArray(moviesList) || moviesList.length === 0) {
+      return [];
+    }
+
+    // Match season if series
+    let targetMovie: SubsourceMovieItem | undefined;
+    if (query.type === 'series' && query.season !== null) {
+      targetMovie = moviesList.find(m => m.season === query.season);
+    }
+    if (!targetMovie) {
+      targetMovie = moviesList.find(m => m.type === 'movie') || moviesList[0];
+    }
+
+    if (!targetMovie?.movieId) {
+      return [];
+    }
+
+    // 2. Fetch subtitles for the found movieId
+    const subsUrl = 'https://api.subsource.net/api/v1/subtitles';
+    const subsRes = await this.httpGet<SubsourceSubtitlesResponse>(
+      subsUrl,
+      {
+        params: { movieId: targetMovie.movieId },
+        headers: { 'X-API-Key': apiKey },
+        timeout
+      },
+      signal
+    );
+
+    const list = subsRes.data?.subtitles || subsRes.data?.data || [];
     if (!Array.isArray(list) || list.length === 0) {
       return [];
     }
@@ -67,32 +103,18 @@ export class SubsourceProvider extends BaseSubtitleProvider {
     const items: RawSubtitleItem[] = [];
 
     for (const sub of list) {
-      // If series, match season and episode if present
-      if (query.season !== null && sub.season !== undefined && sub.season !== query.season) {
-        continue;
-      }
-      if (query.episode !== null && sub.episode !== undefined && sub.episode !== query.episode) {
-        continue;
-      }
+      const rawLang = sub.language || 'unknown';
+      const releaseName = (Array.isArray(sub.releaseInfo) && sub.releaseInfo[0]) || `${targetMovie.title || cleanImdb}`;
+      const isHI = Boolean(sub.hearingImpaired || /\[cc\]|\[hi\]|\(hi\)/i.test(releaseName));
 
-      const rawLang = sub.lang || sub.language || 'unknown';
-      const releaseName = sub.release || sub.name || `${cleanImdb}`;
-      const isHI = Boolean(sub.hi || sub.hearingImpaired || /\[cc\]|\[hi\]|\(hi\)/i.test(releaseName));
-
-      // Construct download URL
-      let downloadUrl = sub.link || '';
-      if (!downloadUrl && (sub.id || sub.subId)) {
-        const id = sub.id || sub.subId;
-        downloadUrl = `https://api.subsource.net/api/v1/subtitles/download/${id}`;
-      }
-
-      if (!downloadUrl) continue;
+      const downloadUrl = `https://api.subsource.net/api/v1/subtitles/${sub.subtitleId}/download`;
+      const proxyUrl = `/sub/proxy?url=${encodeURIComponent(downloadUrl)}&apiKey=${encodeURIComponent(apiKey)}&filename=${encodeURIComponent(releaseName + '.srt')}&provider=subsource`;
 
       items.push({
-        id: `subsource-${sub.id || sub.subId || Math.random().toString(36).substring(2, 9)}`,
+        id: `subsource-${sub.subtitleId}`,
         provider: this.id,
         providerName: 'Subsource',
-        url: downloadUrl,
+        url: proxyUrl,
         lang: rawLang,
         release: releaseName,
         format: 'srt',

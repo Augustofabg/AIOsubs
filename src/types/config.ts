@@ -47,6 +47,7 @@ export interface UserConfig {
   languages: string[];
   allowUnknownLanguages: boolean;
   languageRemap: Record<string, string>;
+  language_remapping?: Record<string, string>;
   providerTimeoutMs: number;
   deduplication: boolean;
   deduplicationStrategy?: 'both' | 'hash' | 'fuzzy';
@@ -56,7 +57,8 @@ export interface UserConfig {
   autoAlignment?: AutoAlignmentConfig;
 }
 
-export type PartialUserConfig = Partial<Omit<UserConfig, 'providers' | 'languageRemap'>> & {
+export type PartialUserConfig = Partial<Omit<UserConfig, 'providers' | 'languageRemap' | 'language_remapping'>> & {
   providers?: Record<string, Partial<ProviderConfigItem>>;
   languageRemap?: Record<string, string>;
+  language_remapping?: Record<string, string>;
 };

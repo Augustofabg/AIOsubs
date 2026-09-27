@@ -16,7 +16,13 @@ export const SUPPORTED_LANGUAGES: LanguageInfo[] = [
     name: 'Portuguese (Brazil)',
     nativeName: 'Português (Brasil)',
     flag: '🇧🇷',
-    aliases: ['pt-br', 'ptbr', 'brazilian', 'brazilian portuguese', 'pob', 'pb']
+    aliases: [
+      'pt-br', 'pt_br', 'ptbr', 'brazilian', 'brazilian portuguese', 'pob', 'pb',
+      'brazillian', 'brazillian portuguese', 'brazillian-portuguese', 'brazilian-portuguese',
+      'portuguese (brazil)', 'portuguese (br)', 'portuguese brazil', 'portuguese brasil',
+      'portugues (brasil)', 'portugues (br)', 'português (brasil)', 'português (br)',
+      'portuguese-brazil', 'portuguese-br', 'portugues brasil', 'português brasil'
+    ]
   },
   {
     code: 'por',
@@ -25,7 +31,12 @@ export const SUPPORTED_LANGUAGES: LanguageInfo[] = [
     name: 'Portuguese (Portugal)',
     nativeName: 'Português (Portugal)',
     flag: '🇵🇹',
-    aliases: ['pt-pt', 'ptpt', 'european portuguese', 'portuguese', 'por', 'pt']
+    aliases: [
+      'pt-pt', 'pt_pt', 'ptpt', 'european portuguese', 'portuguese (portugal)', 'portuguese (pt)',
+      'portuguese portugal', 'portugues (portugal)', 'portugues (pt)', 'português (portugal)', 'português (pt)',
+      'portuguese-portugal', 'portuguese-pt', 'portugues portugal', 'português portugal',
+      'portuguese', 'portugues', 'português', 'por', 'pt'
+    ]
   },
   {
     code: 'eng',
@@ -404,15 +415,113 @@ export function normalizeLanguageCode(raw: string | undefined | null): string | 
   const clean = raw.trim().toLowerCase().replace(/_/g, '-');
   if (clean === '' || clean === 'unknown' || clean === 'desconhecido') return null;
 
+  // 1. Direct match in lookup map
   const found = LOOKUP_MAP.get(clean);
   if (found) return found.code;
-  
-  // Try matching prefix if e.g. "pt-br-extra"
+
+  // Fast resolution for Brazilian Portuguese variants (e.g. SubDL's "brazillian-portuguese", "brazilian", "brasil")
+  if (/brazi?l/i.test(clean)) {
+    return 'pob';
+  }
+
+  // 2. Strip brackets, parentheses, slashes (e.g. "Portuguese (BR)" -> "portuguese br")
+  const stripped = clean.replace(/[()[\]/]/g, ' ').replace(/\s+/g, ' ').trim();
+  const strippedFound = LOOKUP_MAP.get(stripped);
+  if (strippedFound) return strippedFound.code;
+
+  // 3. Try matching hyphenated prefix or subtag (e.g. "pt-br-sdh" -> "pt-br")
   if (clean.includes('-')) {
-    const prefix = clean.split('-')[0];
-    const prefixFound = LOOKUP_MAP.get(prefix);
+    const parts = clean.split('-');
+    if (parts.length >= 2) {
+      const tag2 = `${parts[0]}-${parts[1]}`;
+      const tag2Found = LOOKUP_MAP.get(tag2);
+      if (tag2Found) return tag2Found.code;
+    }
+    const prefixFound = LOOKUP_MAP.get(parts[0]);
     if (prefixFound) return prefixFound.code;
   }
-  
+
   return null;
+}
+
+/**
+ * Maps ISO 639-2 whitelist languages to OpenSubtitles v1 codes (e.g. 'pob' -> 'pt-br,pob', 'eng' -> 'en,eng').
+ * Also includes source languages from remapRules if their target is in the whitelist.
+ */
+export function mapWhitelistToOpenSubtitles(
+  languages: string[],
+  remapRules?: Record<string, string>
+): string[] {
+  const effectiveLanguages = new Set(languages.map(l => normalizeLanguageCode(l) || l.trim().toLowerCase()));
+
+  if (remapRules && Object.keys(remapRules).length > 0) {
+    for (const [from, to] of Object.entries(remapRules)) {
+      const normTo = normalizeLanguageCode(to) || to.trim().toLowerCase();
+      if (effectiveLanguages.has(normTo)) {
+        const normFrom = normalizeLanguageCode(from) || from.trim().toLowerCase();
+        effectiveLanguages.add(normFrom);
+      }
+    }
+  }
+
+  const result = new Set<string>();
+  for (const lang of effectiveLanguages) {
+    const norm = normalizeLanguageCode(lang) || lang.trim().toLowerCase();
+    if (norm === 'pob') {
+      result.add('pt-br');
+      result.add('pob');
+    } else if (norm === 'por') {
+      result.add('pt-pt');
+      result.add('por');
+      result.add('pt');
+    } else {
+      const info = LOOKUP_MAP.get(norm);
+      if (info?.iso639_1) {
+        result.add(info.iso639_1);
+      }
+      result.add(norm);
+    }
+  }
+  return Array.from(result);
+}
+
+/**
+ * Maps ISO 639-2 whitelist languages to SubDL compatible codes (e.g. 'pob' -> 'PT-BR', 'eng' -> 'EN').
+ * Also includes source languages from remapRules if their target is in the whitelist.
+ */
+export function mapWhitelistToSubDL(
+  languages: string[],
+  remapRules?: Record<string, string>
+): string[] {
+  const effectiveLanguages = new Set(languages.map(l => normalizeLanguageCode(l) || l.trim().toLowerCase()));
+
+  if (remapRules && Object.keys(remapRules).length > 0) {
+    for (const [from, to] of Object.entries(remapRules)) {
+      const normTo = normalizeLanguageCode(to) || to.trim().toLowerCase();
+      if (effectiveLanguages.has(normTo)) {
+        const normFrom = normalizeLanguageCode(from) || from.trim().toLowerCase();
+        effectiveLanguages.add(normFrom);
+      }
+    }
+  }
+
+  const result = new Set<string>();
+  for (const lang of effectiveLanguages) {
+    const norm = normalizeLanguageCode(lang) || lang.trim().toLowerCase();
+    if (norm === 'pob') {
+      result.add('PT-BR');
+      result.add('POB');
+    } else if (norm === 'por') {
+      result.add('PT-PT');
+      result.add('POR');
+      result.add('PT');
+    } else {
+      const info = LOOKUP_MAP.get(norm);
+      if (info?.iso639_1) {
+        result.add(info.iso639_1.toUpperCase());
+      }
+      result.add(norm.toUpperCase());
+    }
+  }
+  return Array.from(result);
 }

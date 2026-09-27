@@ -1,6 +1,7 @@
 import { BaseSubtitleProvider } from './base';
 import { SubtitleQuery, ProviderContext, RawSubtitleItem } from '../types/provider';
 import { ENV } from '../config/env';
+import { mapWhitelistToSubDL } from '../utils/languages';
 
 interface SubDLSubtitleItem {
   release_name: string;
@@ -53,7 +54,11 @@ export class SubDLProvider extends BaseSubtitleProvider {
       params.api_key = apiKey;
     }
 
-    if (query.season !== null && query.episode !== null) {
+    if (query.type === 'series' && query.season !== null && query.episode !== null) {
+      params.type = 'tv';
+      params.season = query.season;
+      params.episode = query.episode;
+    } else if (query.season !== null && query.episode !== null) {
       params.type = 'tv';
       params.season = query.season;
       params.episode = query.episode;
@@ -61,9 +66,14 @@ export class SubDLProvider extends BaseSubtitleProvider {
       params.type = 'movie';
     }
 
-    // Filter languages if configured
-    if (context.config.languages && context.config.languages.length > 0) {
-      params.languages = context.config.languages.join(',').toUpperCase();
+    // Filter languages strictly by user whitelist
+    const effectiveLangs = (context.config.languages && context.config.languages.length > 0)
+      ? context.config.languages
+      : ['pob', 'eng'];
+    const activeRemap = context.config.language_remapping || context.config.languageRemap;
+    const subdlLangs = mapWhitelistToSubDL(effectiveLangs, activeRemap);
+    if (subdlLangs.length > 0) {
+      params.languages = subdlLangs.join(',');
     }
 
     const response = await this.httpGet<SubDLResponse>(
@@ -99,14 +109,16 @@ export class SubDLProvider extends BaseSubtitleProvider {
         /\[cc\]|\.cc\.|\[hi\]|\(hi\)|hearing/i.test(releaseName)
       );
 
+      const proxyUrl = `/sub/proxy?url=${encodeURIComponent(downloadUrl)}&filename=${encodeURIComponent(releaseName + '.srt')}&provider=subdl`;
+
       items.push({
         id: `subdl-${Math.random().toString(36).substring(2, 10)}`,
         provider: this.id,
         providerName: 'SubDL',
-        url: downloadUrl,
+        url: proxyUrl,
         lang: sub.lang || 'unknown',
         release: releaseName,
-        format: downloadUrl.toLowerCase().endsWith('.vtt') ? 'vtt' : 'srt',
+        format: 'srt',
         hearingImpaired: isHI,
         rating: sub.sub_rating,
         downloads: sub.sub_download_count,
