@@ -247,16 +247,15 @@ export function createServer(): express.Application {
 
     if (service === 'opensubtitles') {
       try {
-        if (apiKey.length < 8) {
-          res.json({ valid: false, error: 'Chave do OpenSubtitles muito curta.' });
+        if (!apiKey || apiKey.length < 16) {
+          res.json({ valid: false, error: 'Chave do OpenSubtitles inválida ou incompleta.' });
           return;
         }
 
         const response = await axios.get('https://api.opensubtitles.com/api/v1/subtitles', {
           params: {
-            imdb_id: '133093',
-            type: 'movie',
-            languages: 'pt-br'
+            query: 'matrix',
+            languages: 'en'
           },
           headers: {
             'Api-Key': apiKey,
@@ -274,15 +273,10 @@ export function createServer(): express.Application {
         res.json({ valid: false, error: 'Resposta inesperada do OpenSubtitles' });
       } catch (err: any) {
         console.error('OpenSubtitles validation error:', err.response?.status, err.response?.data || err.message);
-        if (err.response?.status === 401 || err.response?.status === 403) {
-          res.json({ valid: false, error: 'Chave inválida ou não autorizada no OpenSubtitles' });
-          return;
-        }
-        if (apiKey.length >= 16) {
-          res.json({ valid: true });
-          return;
-        }
-        res.json({ valid: false, error: 'Erro ao validar chave no OpenSubtitles' });
+        const errMsg = err.response?.status === 403 || err.response?.status === 401
+          ? 'Chave não autorizada ou inexistente no OpenSubtitles. Verifique se ativou "Under development" no OpenSubtitles.com.'
+          : 'Falha na comunicação com o OpenSubtitles.';
+        res.json({ valid: false, error: errMsg });
       }
       return;
     }
