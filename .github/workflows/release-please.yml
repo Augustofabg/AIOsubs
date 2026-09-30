@@ -52,10 +52,11 @@ jobs:
           # configuradas corretamente nas Settings do repositório.
           token: ${{ secrets.GITHUB_TOKEN }}
 
-          # Arquivo de configuração avançada (opcional — criado abaixo).
-          # Descomente se usar .release-please-config.json.
-          # config-file: .release-please-config.json
-          # manifest-file: .release-please-manifest.json
+          # Arquivos de configuração avançada.
+          # O manifesto registra a versão atual (0.1.1) para sincronizar
+          # com as releases já existentes no repositório.
+          config-file: .release-please-config.json
+          manifest-file: .release-please-manifest.json
 
   # ─────────────────────────────────────────────────────────────────────────
   # Job opcional: disparar o build Docker automaticamente após uma release.
