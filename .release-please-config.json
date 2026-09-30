@@ -17,6 +17,8 @@
     "bump-minor-pre-major": false,
     "bump-patch-for-minor-pre-major": false,
     "draft": false,
-    "prerelease": false
+    "prerelease": false,
+    "pull-request-header": "## v${version}\n\n[v${version}](https://github.com/Augustofabg/AIOsubs/releases/tag/v${version})",
+    "pull-request-footer": ""
   }
 }
