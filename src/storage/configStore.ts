@@ -34,7 +34,16 @@ export function isUuid(str: string): boolean {
 function getDataDirectory(): string {
   const custom = (process.env.DATA_DIR || ENV.DATA_DIR || '').trim();
   if (custom) return custom;
-  return path.join(__dirname, '..', '..', 'data');
+
+  // On read-only filesystems (e.g. Render), fall back to /tmp which is always writable.
+  // Locally, use the project-relative 'data' directory.
+  const projectRelative = path.join(__dirname, '..', '..', 'data');
+  try {
+    fs.mkdirSync(projectRelative, { recursive: true });
+    return projectRelative;
+  } catch {
+    return path.join(require('os').tmpdir(), 'aiosubs-data');
+  }
 }
 
 function getStoreFilePath(): string {
