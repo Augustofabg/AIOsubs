@@ -1,0 +1,164 @@
+name: Custom Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Generate and Publish Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Need full history to calculate versions from tags
+
+      - name: Calculate Next Version and Generate Changelog
+        id: calc
+        run: |
+          # 1. Detect latest tag
+          LAST_TAG_REAL=$(git describe --tags --match "v*" --abbrev=0 2>/dev/null || echo "")
+          LATEST_TAG=$(git tag -l "v*" --sort=-v:refname | head -n 1)
+
+          # 2. Get commits to analyze
+          if [ -n "$LAST_TAG_REAL" ]; then
+            COMMITS=$(git log ${LAST_TAG_REAL}..HEAD --pretty=format:"%H|%s")
+          else
+            COMMITS=$(git log --pretty=format:"%H|%s")
+          fi
+
+          if [ -z "$COMMITS" ]; then
+            echo "No new commits found. Exiting."
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # 3. Analyze commits for bump types
+          BUMP_MAJOR=false
+          BUMP_MINOR=false
+          BUMP_PATCH=false
+
+          while IFS='|' read -r HASH SUBJECT; do
+            if [[ "$SUBJECT" == *"BREAKING CHANGE"* ]] || [[ "$SUBJECT" =~ ^[a-zA-Z]+(\([^)]+\))?!: ]]; then
+              BUMP_MAJOR=true
+            elif [[ "$SUBJECT" =~ ^feat(\([^)]+\))?: ]]; then
+              BUMP_MINOR=true
+            elif [[ "$SUBJECT" =~ ^fix(\([^)]+\))?: ]] || [[ "$SUBJECT" =~ ^perf(\([^)]+\))?: ]]; then
+              BUMP_PATCH=true
+            fi
+          done <<< "$COMMITS"
+
+          if [ "$BUMP_MAJOR" = "false" ] && [ "$BUMP_MINOR" = "false" ] && [ "$BUMP_PATCH" = "false" ]; then
+            echo "No semantic commits (feat/fix/perf/breaking) found. Exiting."
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # 4. Calculate next version and prerelease status
+          # Default to the first requested release if no previous semantic tag or it's v0.x
+          if [ -z "$LATEST_TAG" ] || [[ "$LATEST_TAG" == v0.* ]]; then
+            NEXT_MAJOR=1
+            NEXT_MINOR=3
+            NEXT_PATCH=0
+            # Major changed from 0 to 1, so it's a full release
+            IS_PRERELEASE="false" 
+          else
+            # Extract parts: v<MAJOR>.<MINOR>.<PATCH>
+            MAJOR=$(echo $LATEST_TAG | sed -E 's/v([0-9]+)\.([0-9]+)\.([0-9]+)/\1/')
+            MINOR=$(echo $LATEST_TAG | sed -E 's/v([0-9]+)\.([0-9]+)\.([0-9]+)/\2/')
+            MINOR=$((10#$MINOR)) # Strip leading zero for math
+            PATCH=$(echo $LATEST_TAG | sed -E 's/v([0-9]+)\.([0-9]+)\.([0-9]+)/\3/')
+
+            # By default, any bump in Minor or Patch makes it a prerelease
+            IS_PRERELEASE="true"
+
+            if [ "$BUMP_MAJOR" = "true" ]; then
+              NEXT_MAJOR=$((MAJOR + 1))
+              NEXT_MINOR=0
+              NEXT_PATCH=0
+              # Major version changed, so it must be a full release
+              IS_PRERELEASE="false"
+            elif [ "$BUMP_MINOR" = "true" ]; then
+              NEXT_MAJOR=$MAJOR
+              NEXT_MINOR=$((MINOR + 1))
+              NEXT_PATCH=0
+            else
+              NEXT_MAJOR=$MAJOR
+              NEXT_MINOR=$MINOR
+              NEXT_PATCH=$((PATCH + 1))
+            fi
+          fi
+
+          # Format MINOR with exactly two digits zero-padded
+          printf -v FORMATTED_MINOR "%02d" $NEXT_MINOR
+          NEXT_TAG="v${NEXT_MAJOR}.${FORMATTED_MINOR}.${NEXT_PATCH}"
+          
+          echo "tag=${NEXT_TAG}" >> $GITHUB_OUTPUT
+          echo "prerelease=${IS_PRERELEASE}" >> $GITHUB_OUTPUT
+          echo "skip=false" >> $GITHUB_OUTPUT
+
+          # 5. Generate Changelog
+          FEAT_CHANGES=()
+          FIX_CHANGES=()
+          PERF_CHANGES=()
+
+          while IFS='|' read -r HASH SUBJECT; do
+            if [[ "$SUBJECT" =~ ^(feat|fix|perf)(\(([^)]+)\))?!?:[[:space:]]+(.*)$ ]]; then
+              TYPE="${BASH_REMATCH[1]}"
+              SCOPE="${BASH_REMATCH[3]}"
+              MSG="${BASH_REMATCH[4]}"
+              
+              if [ -n "$SCOPE" ]; then
+                FORMATTED_MSG="* **${SCOPE}:** ${MSG} ([${HASH:0:7}](https://github.com/${{ github.repository }}/commit/${HASH}))"
+              else
+                FORMATTED_MSG="* ${MSG} ([${HASH:0:7}](https://github.com/${{ github.repository }}/commit/${HASH}))"
+              fi
+
+              if [ "$TYPE" = "feat" ]; then FEAT_CHANGES+=("$FORMATTED_MSG"); fi
+              if [ "$TYPE" = "fix" ]; then FIX_CHANGES+=("$FORMATTED_MSG"); fi
+              if [ "$TYPE" = "perf" ]; then PERF_CHANGES+=("$FORMATTED_MSG"); fi
+            fi
+          done <<< "$COMMITS"
+
+          CHANGELOG_FILE="release_notes.md"
+          
+          # Write top header
+          echo "## [${NEXT_MAJOR}.${FORMATTED_MINOR}.${NEXT_PATCH}](https://github.com/${{ github.repository }}/releases/tag/${NEXT_TAG}) ($(date +'%Y-%m-%d'))" > $CHANGELOG_FILE
+          echo "" >> $CHANGELOG_FILE
+
+          if [ ${#FEAT_CHANGES[@]} -gt 0 ]; then
+            echo "### Features" >> $CHANGELOG_FILE
+            echo "" >> $CHANGELOG_FILE
+            printf "%s\n" "${FEAT_CHANGES[@]}" >> $CHANGELOG_FILE
+            echo "" >> $CHANGELOG_FILE
+          fi
+
+          if [ ${#FIX_CHANGES[@]} -gt 0 ]; then
+            echo "### Bug Fixes" >> $CHANGELOG_FILE
+            echo "" >> $CHANGELOG_FILE
+            printf "%s\n" "${FIX_CHANGES[@]}" >> $CHANGELOG_FILE
+            echo "" >> $CHANGELOG_FILE
+          fi
+
+          if [ ${#PERF_CHANGES[@]} -gt 0 ]; then
+            echo "### Performance Improvements" >> $CHANGELOG_FILE
+            echo "" >> $CHANGELOG_FILE
+            printf "%s\n" "${PERF_CHANGES[@]}" >> $CHANGELOG_FILE
+            echo "" >> $CHANGELOG_FILE
+          fi
+
+      - name: Publish GitHub Release
+        if: steps.calc.outputs.skip == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.calc.outputs.tag }}
+          name: ${{ steps.calc.outputs.tag }}
+          body_path: release_notes.md
+          prerelease: ${{ steps.calc.outputs.prerelease == 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
