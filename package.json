@@ -1,6 +1,6 @@
 {
   "name": "aiosubs",
-  "version": "0.2.0",
+  "version": "1.3.0",
   "description": "Unified Stremio & Nuvio subtitle aggregator with multi-provider search, language normalization, remapping, and custom formatting.",
   "main": "dist/index.js",
   "scripts": {
