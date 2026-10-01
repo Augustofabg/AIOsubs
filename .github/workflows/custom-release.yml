@@ -43,12 +43,17 @@ jobs:
           BUMP_MINOR=false
           BUMP_PATCH=false
 
+          RE_MAJOR="^[a-zA-Z]+(\([^)]+\))?!:"
+          RE_MINOR="^feat(\([^)]+\))?:"
+          RE_PATCH_FIX="^fix(\([^)]+\))?:"
+          RE_PATCH_PERF="^perf(\([^)]+\))?:"
+
           while IFS='|' read -r HASH SUBJECT; do
-            if [[ "$SUBJECT" == *"BREAKING CHANGE"* ]] || [[ "$SUBJECT" =~ ^[a-zA-Z]+(\([^)]+\))?!: ]]; then
+            if [[ "$SUBJECT" == *"BREAKING CHANGE"* ]] || [[ "$SUBJECT" =~ $RE_MAJOR ]]; then
               BUMP_MAJOR=true
-            elif [[ "$SUBJECT" =~ ^feat(\([^)]+\))?: ]]; then
+            elif [[ "$SUBJECT" =~ $RE_MINOR ]]; then
               BUMP_MINOR=true
-            elif [[ "$SUBJECT" =~ ^fix(\([^)]+\))?: ]] || [[ "$SUBJECT" =~ ^perf(\([^)]+\))?: ]]; then
+            elif [[ "$SUBJECT" =~ $RE_PATCH_FIX ]] || [[ "$SUBJECT" =~ $RE_PATCH_PERF ]]; then
               BUMP_PATCH=true
             fi
           done <<< "$COMMITS"
@@ -107,8 +112,10 @@ jobs:
           FIX_CHANGES=()
           PERF_CHANGES=()
 
+          RE_CHANGELOG="^(feat|fix|perf)(\(([^)]+)\))?!?:[[:space:]]+(.*)$"
+
           while IFS='|' read -r HASH SUBJECT; do
-            if [[ "$SUBJECT" =~ ^(feat|fix|perf)(\(([^)]+)\))?!?:[[:space:]]+(.*)$ ]]; then
+            if [[ "$SUBJECT" =~ $RE_CHANGELOG ]]; then
               TYPE="${BASH_REMATCH[1]}"
               SCOPE="${BASH_REMATCH[3]}"
               MSG="${BASH_REMATCH[4]}"
