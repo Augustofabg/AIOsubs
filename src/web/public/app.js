@@ -238,7 +238,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
   } catch {
-      }
+  }
 
   renderAll();
 });
@@ -685,7 +685,7 @@ function setupHomeActions() {
   document.getElementById('btn-cancel-branding')?.addEventListener('click', closeBrandingModal);
   document.getElementById('btn-close-branding-modal')?.addEventListener('click', closeBrandingModal);
 
-    document.getElementById('btn-home-signout')?.addEventListener('click', () => {
+  document.getElementById('btn-home-signout')?.addEventListener('click', () => {
     openModal('modal-signout-confirm');
   });
 }
@@ -780,7 +780,7 @@ function setupServicesActions() {
     const toggle = document.getElementById(`svc-toggle-${id}`);
     if (toggle) {
       toggle.addEventListener('click', async (e) => {
-                const isTurningOn = toggle.checked;
+        const isTurningOn = toggle.checked;
 
         if (isTurningOn) {
           // Rule: cannot be turned ON without valid API key
@@ -788,7 +788,7 @@ function setupServicesActions() {
           const apiKey = prov?.apiKey?.trim() || '';
 
           if (!apiKey) {
-                        e.preventDefault();
+            e.preventDefault();
             toggle.checked = false;
             prov.enabled = false;
             showMissingCredentialsBanner([SERVICES_META[id]?.name || id]);
@@ -850,7 +850,7 @@ function setupServicesActions() {
       });
     }
 
-        const btnGear = document.getElementById(`btn-config-${id}`);
+    const btnGear = document.getElementById(`btn-config-${id}`);
     if (btnGear) {
       btnGear.addEventListener('click', () => {
         openServiceConfigModal(id);
@@ -858,7 +858,7 @@ function setupServicesActions() {
     }
   });
 
-    const searchInput = document.getElementById('search-services');
+  const searchInput = document.getElementById('search-services');
   if (searchInput) {
     searchInput.addEventListener('input', () => {
       const q = searchInput.value.toLowerCase().trim();
@@ -889,7 +889,7 @@ function setupServicesActions() {
     });
   }
 
-    const btnEye = document.getElementById('btn-modal-toggle-eye');
+  const btnEye = document.getElementById('btn-modal-toggle-eye');
   const eyeShow = document.getElementById('eye-icon-show');
   const eyeHide = document.getElementById('eye-icon-hide');
   if (btnEye && keyInput) {
@@ -906,7 +906,7 @@ function setupServicesActions() {
     });
   }
 
-    document.getElementById('btn-save-service-modal')?.addEventListener('click', () => {
+  document.getElementById('btn-save-service-modal')?.addEventListener('click', () => {
     const serviceId = document.getElementById('modal-service-id').value;
     const newKey = keyInput ? keyInput.value.trim() : '';
 
@@ -974,7 +974,7 @@ function triggerAutoValidation(serviceId, apiKey) {
     return;
   }
 
-    statusEl.className = 'api-key-validation-indicator loading';
+  statusEl.className = 'api-key-validation-indicator loading';
   statusEl.innerHTML = '';
   statusEl.title = 'Validating key...';
 
@@ -1095,7 +1095,7 @@ function setupAddonsActions() {
     });
   }
 
-    document.getElementById('btn-edit-timeout-up')?.addEventListener('click', () => {
+  document.getElementById('btn-edit-timeout-up')?.addEventListener('click', () => {
     const input = document.getElementById('edit-addon-timeout');
     if (input) {
       let val = parseInt(input.value, 10) || 20000;
@@ -1113,7 +1113,7 @@ function setupAddonsActions() {
     }
   });
 
-    const selectFetching = document.getElementById('select-fetching-strategy');
+  const selectFetching = document.getElementById('select-fetching-strategy');
   if (selectFetching) {
     selectFetching.value = state.config.addonFetchingStrategy || 'default';
     setupCustomSelect('wrap-fetching-strategy', 'select-fetching-strategy', (val) => {
@@ -1312,7 +1312,7 @@ function closeEditAddonModal() {
 }
 
 function setupFiltersActions() {
-    const tabButtons = document.querySelectorAll('.filters-nav-item');
+  const tabButtons = document.querySelectorAll('.filters-nav-item');
   tabButtons.forEach(btn => {
     btn.addEventListener('click', () => {
       const tabId = btn.getAttribute('data-filter-tab');
@@ -1322,7 +1322,7 @@ function setupFiltersActions() {
     });
   });
 
-    document.getElementById('btn-quick-pt-en')?.addEventListener('click', () => {
+  document.getElementById('btn-quick-pt-en')?.addEventListener('click', () => {
     state.config.languages = ['pob', 'por', 'eng'];
     renderWhitelistTags();
     renderLanguageChips(document.getElementById('search-languages')?.value || '');
@@ -1338,7 +1338,7 @@ function setupFiltersActions() {
     notifyConfigChanged();
   });
 
-    const searchLangInput = document.getElementById('search-languages');
+  const searchLangInput = document.getElementById('search-languages');
   if (searchLangInput) {
     searchLangInput.addEventListener('input', () => {
       renderLanguageChips(searchLangInput.value.toLowerCase().trim());
@@ -1347,7 +1347,7 @@ function setupFiltersActions() {
 
   setupLanguageRemappingUI();
 
-    const toggleDedup = document.getElementById('toggle-deduplication');
+  const toggleDedup = document.getElementById('toggle-deduplication');
   const dedupStrategyRow = document.getElementById('dedup-strategy-row');
 
   if (toggleDedup) {
@@ -1728,7 +1728,7 @@ function renderRemapDropdownOptions(type, query = '') {
     customItem.className = 'remap-option-item remap-option-custom';
     customItem.innerHTML = `
       <div class="remap-option-left">
-        <span class="remap-option-flag">✨</span>
+        <span class="remap-option-flag">+</span>
         <span class="remap-option-name">Use custom code: <strong>"${escapeHtml(q)}"</strong></span>
       </div>
       <span class="remap-option-code">${escapeHtml(q)}</span>
@@ -2060,7 +2060,7 @@ function syncConnectorTimeout(newVal) {
 }
 
 function setupInstallPageActions() {
-    document.getElementById('btn-export-backup')?.addEventListener('click', () => {
+  document.getElementById('btn-export-backup')?.addEventListener('click', () => {
     const backupData = {
       version: '1.0.0',
       exportedAt: new Date().toISOString(),
@@ -2079,7 +2079,7 @@ function setupInstallPageActions() {
     showToast('Settings exported successfully!');
   });
 
-    const fileImportInput = document.getElementById('file-import-backup');
+  const fileImportInput = document.getElementById('file-import-backup');
   document.getElementById('btn-import-backup')?.addEventListener('click', () => {
     fileImportInput?.click();
   });
@@ -2109,7 +2109,7 @@ function setupInstallPageActions() {
     reader.readAsText(file);
   });
 
-    setupDynamicPasswordInput(
+  setupDynamicPasswordInput(
     'create-input-password',
     'create-password-wrap',
     'btn-toggle-create-eye',
@@ -2125,7 +2125,7 @@ function setupInstallPageActions() {
     'create-confirm-eye-hide'
   );
 
-    document.getElementById('btn-create-config')?.addEventListener('click', async () => {
+  document.getElementById('btn-create-config')?.addEventListener('click', async () => {
     const passInput = document.getElementById('create-input-password');
     const confirmInput = document.getElementById('create-input-confirm-password');
     const errBox = document.getElementById('create-config-error');
@@ -2225,14 +2225,14 @@ function setupInstallPageActions() {
     }
   });
 
-    document.getElementById('btn-copy-uuid')?.addEventListener('click', () => {
+  document.getElementById('btn-copy-uuid')?.addEventListener('click', () => {
     if (state.uuid) {
       navigator.clipboard.writeText(state.uuid);
       showToast('UUID copied!');
     }
   });
 
-    setupDynamicPasswordInput(
+  setupDynamicPasswordInput(
     'input-user-password',
     'user-password-wrap',
     'btn-toggle-pass-eye',
@@ -2246,11 +2246,11 @@ function setupInstallPageActions() {
     }
   );
 
-    document.getElementById('btn-explicit-save')?.addEventListener('click', () => {
+  document.getElementById('btn-explicit-save')?.addEventListener('click', () => {
     saveCurrentConfiguration(false);
   });
 
-    document.getElementById('btn-copy-manifest')?.addEventListener('click', () => {
+  document.getElementById('btn-copy-manifest')?.addEventListener('click', () => {
     const input = document.getElementById('final-manifest-url');
     if (input && input.value && state.isConfigCreated && state.uuid) {
       navigator.clipboard.writeText(input.value);
@@ -2258,7 +2258,7 @@ function setupInstallPageActions() {
     }
   });
 
-    document.getElementById('pill-open-stremio')?.addEventListener('click', () => {
+  document.getElementById('pill-open-stremio')?.addEventListener('click', () => {
     const link = document.getElementById('link-install-stremio');
     if (link && link.href && state.isConfigCreated && state.uuid) {
       window.location.href = link.href;
@@ -2280,7 +2280,7 @@ function setupInstallPageActions() {
     }
   });
 
-    const timeoutInput = document.getElementById('install-addon-timeout');
+  const timeoutInput = document.getElementById('install-addon-timeout');
   if (timeoutInput) {
     timeoutInput.value = state.config.providerTimeoutMs || 6000;
     timeoutInput.addEventListener('change', () => {
@@ -2631,7 +2631,7 @@ function closeLoadConfigModal() {
 }
 
 function setupModals() {
-    setupDynamicPasswordInput('load-input-password', 'load-password-wrap', 'btn-toggle-load-eye', 'load-eye-show', 'load-eye-hide');
+  setupDynamicPasswordInput('load-input-password', 'load-password-wrap', 'btn-toggle-load-eye', 'load-eye-show', 'load-eye-hide');
 
   document.getElementById('btn-close-load-modal')?.addEventListener('click', closeLoadConfigModal);
   document.getElementById('btn-cancel-load-modal')?.addEventListener('click', closeLoadConfigModal);
@@ -2683,7 +2683,7 @@ function setupModals() {
     }
   });
 
-    document.getElementById('btn-close-nuvio-modal')?.addEventListener('click', () => {
+  document.getElementById('btn-close-nuvio-modal')?.addEventListener('click', () => {
     closeModal('modal-nuvio');
   });
 
@@ -2691,7 +2691,7 @@ function setupModals() {
     closeModal('modal-nuvio');
   });
 
-    document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+  document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
     backdrop.addEventListener('click', (e) => {
       if (e.target === backdrop) {
         closeModal(backdrop);

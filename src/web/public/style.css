@@ -1755,7 +1755,7 @@ body {
 
 .remap-option-custom {
   border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
-  color: #60a5fa;
+  color: #a1a1aa;
   font-weight: 500;
 }
 
@@ -1782,6 +1782,7 @@ body {
     grid-template-columns: 1fr;
     gap: 8px;
   }
+
   .remap-arrow-divider {
     transform: rotate(90deg);
     padding: 0;
@@ -2294,9 +2295,9 @@ body {
 
 .password-config-row.collapsible-field {
   transition: opacity 150ms cubic-bezier(0.16, 1, 0.3, 1),
-              max-height 150ms cubic-bezier(0.16, 1, 0.3, 1),
-              margin 150ms cubic-bezier(0.16, 1, 0.3, 1),
-              transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
+    max-height 150ms cubic-bezier(0.16, 1, 0.3, 1),
+    margin 150ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
   max-height: 90px;
   opacity: 1;
