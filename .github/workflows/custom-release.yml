@@ -99,9 +99,7 @@ jobs:
             fi
           fi
 
-          # Format MINOR with exactly two digits zero-padded
-          printf -v FORMATTED_MINOR "%02d" $NEXT_MINOR
-          NEXT_TAG="v${NEXT_MAJOR}.${FORMATTED_MINOR}.${NEXT_PATCH}"
+          NEXT_TAG="v${NEXT_MAJOR}.${NEXT_MINOR}.${NEXT_PATCH}"
           
           echo "tag=${NEXT_TAG}" >> $GITHUB_OUTPUT
           echo "prerelease=${IS_PRERELEASE}" >> $GITHUB_OUTPUT
@@ -135,7 +133,7 @@ jobs:
           CHANGELOG_FILE="release_notes.md"
           
           # Write top header
-          echo "## [${NEXT_MAJOR}.${FORMATTED_MINOR}.${NEXT_PATCH}](https://github.com/${{ github.repository }}/releases/tag/${NEXT_TAG}) ($(date +'%Y-%m-%d'))" > $CHANGELOG_FILE
+          echo "## [${NEXT_MAJOR}.${NEXT_MINOR}.${NEXT_PATCH}](https://github.com/${{ github.repository }}/releases/tag/${NEXT_TAG}) ($(date +'%Y-%m-%d'))" > $CHANGELOG_FILE
           echo "" >> $CHANGELOG_FILE
 
           if [ ${#FEAT_CHANGES[@]} -gt 0 ]; then
