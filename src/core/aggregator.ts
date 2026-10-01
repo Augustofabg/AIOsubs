@@ -17,6 +17,8 @@ export function parseSubtitleQuery(
   let episode: number | null = null;
   let kitsuId: string | null = null;
 
+  const ensureTt = (s: string) => s.startsWith('tt') ? s : (s.match(/^\d+$/) ? `tt${s}` : s);
+
   if (id.includes(':')) {
     const parts = id.split(':');
     if (parts[0].startsWith('tt')) {
@@ -27,14 +29,14 @@ export function parseSubtitleQuery(
       kitsuId = `${parts[0]}:${parts[1]}`;
       episode = parseInt(parts[2], 10);
     } else {
-      imdbId = parts[0].startsWith('tt') ? parts[0] : (parts[0].match(/^\d+$/) ? `tt${parts[0]}` : parts[0]);
+      imdbId = ensureTt(parts[0]);
       if (parts.length >= 3) {
         season = parseInt(parts[1], 10);
         episode = parseInt(parts[2], 10);
       }
     }
   } else {
-    imdbId = id.startsWith('tt') ? id : (id.match(/^\d+$/) ? `tt${id}` : id);
+    imdbId = ensureTt(id);
   }
 
   return {

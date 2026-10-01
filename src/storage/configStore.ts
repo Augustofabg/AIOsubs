@@ -187,7 +187,7 @@ class ConfigStorage {
       if (!parsed || typeof parsed !== 'object') return;
 
       let migratedCount = 0;
-      for (const [k, v] of Object.entries(parsed)) {
+      for (const v of Object.values(parsed)) {
         const rec = v as StoredConfigRecord;
         if (!rec || !rec.uuid || !rec.passwordHash || !rec.config) continue;
 

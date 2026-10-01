@@ -8,7 +8,7 @@ import QRCode from 'qrcode';
 
 import { ENV } from './config/env';
 import { StremioManifest } from './types/stremio';
-import { decodeUserConfig, decodeUserConfigAsync, mergeWithDefaults } from './config/userConfig';
+import { decodeUserConfigAsync, mergeWithDefaults } from './config/userConfig';
 import { handleSubtitleProxy, handleOpenSubtitlesRestDownload, handleShortIdDownload, handleUnifiedSubtitleProxy } from './proxy/subtitleProxy';
 import { getAllProviders } from './providers';
 import { globalSubtitleCache } from './utils/cache';
