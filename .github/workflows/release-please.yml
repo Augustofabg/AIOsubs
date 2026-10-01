@@ -58,45 +58,4 @@ jobs:
           config-file: .release-please-config.json
           manifest-file: .release-please-manifest.json
 
-  # ─────────────────────────────────────────────────────────────────────────
-  # Job opcional: disparar o build Docker automaticamente após uma release.
-  # Remove este job se não precisar dessa integração.
-  # ─────────────────────────────────────────────────────────────────────────
-  post-release:
-    name: Post-release — Tag Docker Image
-    needs: release-please
-    runs-on: ubuntu-latest
 
-    # Só executa quando o merge do PR de release de fato criou uma release
-    if: ${{ needs.release-please.outputs.release_created }}
-
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry (GHCR)
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push versioned Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          # Publica com a tag semântica (ex: v1.2.3) E sobrescreve o :latest
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/aiosubs:${{ needs.release-please.outputs.tag_name }}
-            ghcr.io/${{ github.repository_owner }}/aiosubs:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
